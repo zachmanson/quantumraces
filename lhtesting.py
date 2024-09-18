@@ -17,6 +17,7 @@ for label, output in [
     tableaus, basic_vars = lh.create_tableau(A, B)
     Crange = basic_vars
     for eq, expected_eq in zip(lh.Lemke_Howson(tableaus, basic_vars, Crange, init_pivot=label), output):
+        print(eq, expected_eq)
         print(all(np.isclose(eq, expected_eq)))
 
 # degenerate case
@@ -28,14 +29,12 @@ B = np.array([[3, 3, 1], [1, 1, 3], [3, 1, 3]])
 for label in range(3):
     tableaus, basic_vars = lh.create_tableau(A, B)
     Crange = basic_vars
-    print(tableaus)
-    print(Crange)
     for eq, expected_eq in zip(
         lh.Lemke_Howson(tableaus, basic_vars, Crange, init_pivot = label),
         (np.array([0.5, 0.5, 0]), np.array([0, 0, 1])),
     ):
+        print(eq, expected_eq)
         print(all(np.isclose(eq, expected_eq)))
-
 
 
 '''

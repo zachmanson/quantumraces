@@ -72,7 +72,6 @@ def lexico_ratio(tableau, pivot, Crange):
         if len(row_min) == 1:
             return row_min[0]
     
-    print(len(row_min))
     print("lexico minimum ratio is not found!")
 
 def pivoting(tableau, basic_vars, pivot, Crange):

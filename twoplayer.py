@@ -11,7 +11,7 @@ num_plays = 2 # number of times each player can run Grover's algorithm
 
 K = 20 #number of pure strategies
 #max_K = 20148780 #maximum possible number of iterations per round
-max_K = np.floor(np.pi / 4 * np.sqrt(D)) / 5
+max_K = np.floor(np.pi / 4 * np.sqrt(D))
 intvl = max_K // K #shorten the strategy space by checking intervalss
 gamma = Decimal(0.50) # the probability that alice wins in a fork
 mat_dim = (K+1)**num_plays #dimension of payoff matrix
@@ -27,7 +27,7 @@ original_stdout = sys.stdout
 
 def p_i(t):
     theta = float(np.arcsin(1 / (np.sqrt(D))))
-    return Decimal((np.sin(2*((t * intvl) + 0.5) * theta))**2)
+    return Decimal((np.sin(2*((t * intvl) + 1) * theta))**2)
 
 #function to get create a matrix of the Cartesian products of inputted arrays
 def cartesian(arrays, out = None):
@@ -218,6 +218,7 @@ def get_eq(A, B):
 def main():
     A = get_payoff()
     B = get_payoff(bob = True)
+
     print('payoff matrix made')
     get_eq(A, B)
     sys.stdout = original_stdout

@@ -4,11 +4,8 @@ from itertools import chain
 import numpy as np
 import matplotlib.pyplot as plt
 
-D = tp.D
-
-
 fname = 'output.txt'
-num_simulations = 10000000
+num_simulations = 1000000
 
 def read_from_file(fname):
     c = 0
@@ -17,25 +14,27 @@ def read_from_file(fname):
     alice_prob = []
     bob_prob = []
     strats = {}
+
     with open(fname) as f:
-        line = f.readline()
-        while line:
-            data = line.strip().split(' ')
-            data = [x.strip('[,]') for x in data]
-            if data[0] == 'Alice':
-                alice_strat.append([float(x) for x in data[1:-1]])
-                alice_prob.append(float(data[-1]))
-            elif data[0] == 'Bob':
-                bob_strat.append([float(x) for x in data[1:-1]])
-                bob_prob.append(float(data[-1]))
-            elif(data[0] == '-----' and f.readline().split(' ')[0] != '-----'):
-                strats[c] = [alice_strat, bob_strat, alice_prob, bob_prob]
-                c += 1
-                alice_strat = []
-                bob_strat = []
-                alice_prob = []
-                bob_prob = []
-            line = f.readline()
+        lines = [line.rstrip('\n') for line in f]
+
+    for line in lines:
+        data = line.strip().split(' ')
+        data = [x.strip('[,]') for x in data]
+        if data[0] == 'Alice':
+            alice_strat.append([float(x) for x in data[1:-1]])
+            alice_prob.append(float(data[-1]))
+        elif data[0] == 'Bob':
+            bob_strat.append([float(x) for x in data[1:-1]])
+            bob_prob.append(float(data[-1]))
+        else:
+            strats[c] = [alice_strat, bob_strat, alice_prob, bob_prob]
+            c += 1
+            alice_strat = []
+            bob_strat = []
+            alice_prob = []
+            bob_prob = []
+
     return strats
 
 def simulate_strats(fname):
@@ -106,7 +105,7 @@ def simulate_strats(fname):
 
 
 def plot_fork_rate():
-    original_D = tp.D
+    original_D = 82047028459932.62
     max_Ks = [np.floor(np.pi/4 * np.sqrt(original_D/x)) for x in range(1, 10)]
     print(max_Ks)
     fork_rate = []
