@@ -145,7 +145,7 @@ def get_nash_eq(A: np.ndarray, B: np.ndarray, K: int, num_plays: int, intvl: int
         for i in range(mat_dim):
             eq = gt.lemke_howson(g, init_pivot = i)
 
-            if len(nash_eqs) >= 1:
+            if len(nash_eqs) >= 3:
                 break
 
             if not(any((np.allclose(eq[0], item[0]) and np.allclose(eq[1], item[1]) for item in nash_eqs))):
@@ -157,9 +157,18 @@ def get_nash_eq(A: np.ndarray, B: np.ndarray, K: int, num_plays: int, intvl: int
     return 
 
 
+def get_payoff_element(alice_strat: list, bob_strat: list, num_plays: 3, K: float, D: float, intvl: int, gamma: Decimal, bob: bool = False) -> Decimal:
+    payoff = 0
+    for play in range(1, num_plays + 1):
+        prefactor = get_prefactor(play, alice_strat, bob_strat, D, intvl, bob)
+        print('case: ', get_case(K, gamma, alice_strat, bob_strat, p, D, intvl, play, prefactor, bob))
+        element = Decimal(prefactor * get_case(K, gamma, alice_strat, bob_strat, p, D, intvl, play, prefactor, bob))
+        payoff += element
+    return payoff
+
 def main():
-    K = 10 #number of pure strategies
-    num_plays = 3 #number of plays
+    K = 40 #number of pure strategies
+    num_plays = 2 #number of plays
     D = 82047028459932.62
     #D = 52328312063444
     max_K = np.floor(np.pi / 4 * np.sqrt(D))
@@ -169,6 +178,8 @@ def main():
     A = get_payoff(K, num_plays, D, intvl, Decimal(gamma))
     mat_dim = len(A[0])
     B = get_payoff(K, num_plays, D, intvl, Decimal(gamma), bob = True)
+
+    print(A, B)
 
     print('Payoff matrices created!')
 

@@ -1,13 +1,102 @@
-Alice [2845648.0, 3557060.0, 0.0] 0.102
-Alice [3557060.0, 2134236.0, 0.0] 0.35
-Alice [3557060.0, 2845648.0, 0.0] 0.231
-Alice [4268472.0, 1422824.0, 0.0] 0.169
-Alice [4979884.0, 711412.0, 0.0] 0.103
-Alice [5691296.0, 0.0, 0.0] 0.045
-Bob [2845648.0, 3557060.0, 711412.0] 0.246
-Bob [3557060.0, 0.0, 3557060.0] 0.055
-Bob [3557060.0, 2845648.0, 711412.0] 0.368
-Bob [4268472.0, 1422824.0, 0.0] 0.183
-Bob [4979884.0, 711412.0, 0.0] 0.081
-Bob [5691296.0, 0.0, 0.0] 0.067
+Alice [np.float64(3023501.0), np.float64(2667795.0)] 0.049
+Alice [np.float64(3023501.0), np.float64(2845648.0)] 0.182
+Alice [np.float64(3023501.0), np.float64(3201354.0)] 0.098
+Alice [np.float64(3379207.0), np.float64(3201354.0)] 0.113
+Alice [np.float64(3379207.0), np.float64(3557060.0)] 0.079
+Alice [np.float64(3557060.0), np.float64(3023501.0)] 0.032
+Alice [np.float64(3734913.0), np.float64(2489942.0)] 0.102
+Alice [np.float64(3912766.0), np.float64(2312089.0)] 0.061
+Alice [np.float64(4090619.0), np.float64(2134236.0)] 0.059
+Alice [np.float64(4268472.0), np.float64(1600677.0)] 0.047
+Alice [np.float64(4446325.0), np.float64(1422824.0)] 0.038
+Alice [np.float64(4624178.0), np.float64(1244971.0)] 0.033
+Alice [np.float64(4802031.0), np.float64(1067118.0)] 0.028
+Alice [np.float64(4979884.0), np.float64(889265.0)] 0.024
+Alice [np.float64(5157737.0), np.float64(711412.0)] 0.021
+Alice [np.float64(5335590.0), np.float64(533559.0)] 0.018
+Alice [np.float64(5513443.0), np.float64(355706.0)] 0.016
+Bob [np.float64(2845648.0), np.float64(3201354.0)] 0.105
+Bob [np.float64(3201354.0), np.float64(2845648.0)] 0.024
+Bob [np.float64(3201354.0), np.float64(3201354.0)] 0.084
+Bob [np.float64(3201354.0), np.float64(3557060.0)] 0.088
+Bob [np.float64(3201354.0), np.float64(3912766.0)] 0.062
+Bob [np.float64(3557060.0), np.float64(2845648.0)] 0.101
+Bob [np.float64(3734913.0), np.float64(2312089.0)] 0.08
+Bob [np.float64(3912766.0), np.float64(2134236.0)] 0.062
+Bob [np.float64(4090619.0), np.float64(1956383.0)] 0.053
+Bob [np.float64(4268472.0), np.float64(1778530.0)] 0.045
+Bob [np.float64(4446325.0), np.float64(1600677.0)] 0.039
+Bob [np.float64(4624178.0), np.float64(1422824.0)] 0.033
+Bob [np.float64(4802031.0), np.float64(1244971.0)] 0.029
+Bob [np.float64(4979884.0), np.float64(1067118.0)] 0.025
+Bob [np.float64(5157737.0), np.float64(889265.0)] 0.022
+Bob [np.float64(5335590.0), np.float64(711412.0)] 0.02
+Bob [np.float64(5513443.0), np.float64(533559.0)] 0.018
+Bob [np.float64(5691296.0), np.float64(355706.0)] 0.112
+-------------
+Alice [np.float64(2845648.0), np.float64(2845648.0)] 0.091
+Alice [np.float64(2845648.0), np.float64(3023501.0)] 0.031
+Alice [np.float64(2845648.0), np.float64(3201354.0)] 0.043
+Alice [np.float64(3201354.0), np.float64(2845648.0)] 0.024
+Alice [np.float64(3201354.0), np.float64(3023501.0)] 0.117
+Alice [np.float64(3201354.0), np.float64(3379207.0)] 0.024
+Alice [np.float64(3201354.0), np.float64(3557060.0)] 0.049
+Alice [np.float64(3201354.0), np.float64(3734913.0)] 0.037
+Alice [np.float64(3201354.0), np.float64(3912766.0)] 0.029
+Alice [np.float64(3557060.0), np.float64(2845648.0)] 0.127
+Alice [np.float64(3557060.0), np.float64(3023501.0)] 0.058
+Alice [np.float64(3912766.0), np.float64(2134236.0)] 0.128
+Alice [np.float64(4268472.0), np.float64(1778530.0)] 0.091
+Alice [np.float64(4624178.0), np.float64(1422824.0)] 0.066
+Alice [np.float64(4979884.0), np.float64(711412.0)] 0.049
+Alice [np.float64(5335590.0), np.float64(355706.0)] 0.037
+Bob [np.float64(3023501.0), np.float64(2845648.0)] 0.13
+Bob [np.float64(3023501.0), np.float64(3023501.0)] 0.07
+Bob [np.float64(3023501.0), np.float64(3201354.0)] 0.093
+Bob [np.float64(3023501.0), np.float64(3379207.0)] 0.008
+Bob [np.float64(3023501.0), np.float64(3557060.0)] 0.001
+Bob [np.float64(3379207.0), np.float64(3201354.0)] 0.071
+Bob [np.float64(3379207.0), np.float64(3379207.0)] 0.054
+Bob [np.float64(3379207.0), np.float64(3557060.0)] 0.041
+Bob [np.float64(3379207.0), np.float64(3734913.0)] 0.031
+Bob [np.float64(3734913.0), np.float64(2667795.0)] 0.133
+Bob [np.float64(4090619.0), np.float64(1956383.0)] 0.095
+Bob [np.float64(4446325.0), np.float64(1422824.0)] 0.07
+Bob [np.float64(4802031.0), np.float64(1067118.0)] 0.054
+Bob [np.float64(5157737.0), np.float64(711412.0)] 0.043
+Bob [np.float64(5513443.0), np.float64(355706.0)] 0.086
+Bob [np.float64(5869149.0), np.float64(0.0)] 0.019
+-------------
+Alice [np.float64(2845648.0), np.float64(2845648.0)] 0.071
+Alice [np.float64(2845648.0), np.float64(3023501.0)] 0.049
+Alice [np.float64(2845648.0), np.float64(3201354.0)] 0.045
+Alice [np.float64(3201354.0), np.float64(2845648.0)] 0.022
+Alice [np.float64(3201354.0), np.float64(3201354.0)] 0.079
+Alice [np.float64(3201354.0), np.float64(3379207.0)] 0.064
+Alice [np.float64(3201354.0), np.float64(3557060.0)] 0.049
+Alice [np.float64(3201354.0), np.float64(3734913.0)] 0.037
+Alice [np.float64(3201354.0), np.float64(3912766.0)] 0.029
+Alice [np.float64(3557060.0), np.float64(2667795.0)] 0.175
+Alice [np.float64(3557060.0), np.float64(2845648.0)] 0.01
+Alice [np.float64(3912766.0), np.float64(2134236.0)] 0.128
+Alice [np.float64(4268472.0), np.float64(1778530.0)] 0.091
+Alice [np.float64(4624178.0), np.float64(1422824.0)] 0.066
+Alice [np.float64(4979884.0), np.float64(711412.0)] 0.049
+Alice [np.float64(5335590.0), np.float64(355706.0)] 0.037
+Bob [np.float64(3023501.0), np.float64(2845648.0)] 0.13
+Bob [np.float64(3023501.0), np.float64(3023501.0)] 0.068
+Bob [np.float64(3023501.0), np.float64(3201354.0)] 0.034
+Bob [np.float64(3023501.0), np.float64(3379207.0)] 0.068
+Bob [np.float64(3023501.0), np.float64(3557060.0)] 0.002
+Bob [np.float64(3379207.0), np.float64(3201354.0)] 0.071
+Bob [np.float64(3379207.0), np.float64(3379207.0)] 0.054
+Bob [np.float64(3379207.0), np.float64(3557060.0)] 0.041
+Bob [np.float64(3379207.0), np.float64(3734913.0)] 0.031
+Bob [np.float64(3734913.0), np.float64(2489942.0)] 0.133
+Bob [np.float64(4090619.0), np.float64(1956383.0)] 0.095
+Bob [np.float64(4446325.0), np.float64(1422824.0)] 0.07
+Bob [np.float64(4802031.0), np.float64(1067118.0)] 0.054
+Bob [np.float64(5157737.0), np.float64(711412.0)] 0.043
+Bob [np.float64(5513443.0), np.float64(355706.0)] 0.086
+Bob [np.float64(5869149.0), np.float64(0.0)] 0.02
 -------------
