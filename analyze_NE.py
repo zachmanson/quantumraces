@@ -9,7 +9,7 @@ D = 82047028459932.62
 #D = 52328312063444
 max_K = np.floor(np.pi / 4 * np.sqrt(D))
 intvl = max_K // K
-gamma = 0.5
+gamma = Decimal(0.5)
 
 getcontext().prec = 30 #level of precision in Decimal 
 
@@ -58,30 +58,43 @@ def p(k: int) -> float:
 
 
 def calculate_expected_payoffs(nash_eqs: list):
+    eps = []
     for eq in nash_eqs:
         for player, strategies in eq.items():
             expected_payoff = 0
             if player == 'Alice':
                 for alice_idx, (alice_strategy, alice_prob) in enumerate(strategies):
+                    alice_strategy = [float(x // intvl) for x in alice_strategy]
                     for bob_idx, (bob_strategy, bob_prob) in enumerate(eq['Bob']):
+                        bob_strategy = [float(x // intvl) for x in bob_strategy]
                         payoff = get_payoff_element(alice_strategy, bob_strategy, num_plays, K, D, intvl, gamma, bob = False)
-                        print(payoff)
                         expected_payoff += Decimal(alice_prob) * Decimal(bob_prob) * payoff
-                print(f"Expected payoff for {player}: {expected_payoff}")
+                alice_ep = expected_payoff
 
             elif player == 'Bob':
                 for bob_idx, (bob_strategy, bob_prob) in enumerate(strategies):
+                    bob_strategy = [float(x // intvl) for x in bob_strategy]
                     for alice_idx, (alice_strategy, alice_prob) in enumerate(eq['Alice']):
+                        alice_strategy = [float(x // intvl) for x in alice_strategy]
                         payoff = get_payoff_element(alice_strategy, bob_strategy, num_plays, K, D, intvl, gamma, bob = True)
                         expected_payoff += Decimal(bob_prob) * Decimal(alice_prob) * payoff
-                print(f"Expected payoff for {player}: {expected_payoff}")
+                bob_ep = expected_payoff
+        
+        eps.append((alice_ep, bob_ep))
 
-                                    
+    return eps
 
-def main():
-    data = read_input('output.txt')
-    nash_eqs = parse_data(data)
-    calculate_expected_payoffs(nash_eqs)
-
-if __name__ == '__main__':
-    main()
+def choose_eq(nash_eqs: list, eps: list) -> dict:
+    if len(nash_eqs) == 1:
+        return nash_eqs[0]
+    
+    for idx, ep in enumerate(eps):
+        if ep[0] == max(ep[0] for ep in eps) and ep[1] == max(ep[1] for ep in eps):
+            return nash_eqs[idx]
+    
+    max_min_payoff_idx = max(
+        range(len(eps)), 
+        key = lambda i: min(eps[i][0], eps[i][1])
+    )
+    return nash_eqs[max_min_payoff_idx]
+                      

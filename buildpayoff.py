@@ -161,14 +161,13 @@ def get_payoff_element(alice_strat: list, bob_strat: list, num_plays: 3, K: floa
     payoff = 0
     for play in range(1, num_plays + 1):
         prefactor = get_prefactor(play, alice_strat, bob_strat, D, intvl, bob)
-        print('case: ', get_case(K, gamma, alice_strat, bob_strat, p, D, intvl, play, prefactor, bob))
         element = Decimal(prefactor * get_case(K, gamma, alice_strat, bob_strat, p, D, intvl, play, prefactor, bob))
         payoff += element
     return payoff
 
 def main():
-    K = 40 #number of pure strategies
-    num_plays = 2 #number of plays
+    K = 20 #number of pure strategies
+    num_plays = 3 #number of plays
     D = 82047028459932.62
     #D = 52328312063444
     max_K = np.floor(np.pi / 4 * np.sqrt(D))
