@@ -157,8 +157,8 @@ def get_nash_eq(A: np.ndarray, B: np.ndarray, K: int, num_plays: int, intvl: int
     return 
 
 
-def get_payoff_element(alice_strat: list, bob_strat: list, num_plays: 3, K: float, D: float, intvl: int, gamma: Decimal, bob: bool = False) -> Decimal:
-    payoff = 0
+def get_payoff_element(alice_strat: list, bob_strat: list, num_plays: int, K: float, D: float, intvl: int, gamma: Decimal, bob: bool = False) -> Decimal:
+    payoff = Decimal(0)
     for play in range(1, num_plays + 1):
         prefactor = get_prefactor(play, alice_strat, bob_strat, D, intvl, bob)
         element = Decimal(prefactor * get_case(K, gamma, alice_strat, bob_strat, p, D, intvl, play, prefactor, bob))

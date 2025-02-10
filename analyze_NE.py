@@ -26,7 +26,7 @@ def parse_list(s: str) -> list:
 
 def parse_data(data: list):
     nash_eq = []
-    current_eq = {}
+    current_eq: dict[str, list[tuple[list[float], float]]] = {}
     for line in data:
         if line == '-------------':
             if current_eq:
@@ -61,7 +61,7 @@ def calculate_expected_payoffs(nash_eqs: list):
     eps = []
     for eq in nash_eqs:
         for player, strategies in eq.items():
-            expected_payoff = 0
+            expected_payoff = Decimal(0)
             if player == 'Alice':
                 for alice_idx, (alice_strategy, alice_prob) in enumerate(strategies):
                     alice_strategy = [float(x // intvl) for x in alice_strategy]

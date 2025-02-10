@@ -1,46 +1,15 @@
 import numpy as np
-import lemkehowson as lh
-import sys
-from decimal import *
 
-N = float(2**256) # number of possible hashes
-D = float(1e30)
-GIPS = 167906
-intvl = 15
 
-getcontext().prec = 100
+block_times = []
+current_time = 0.0
+simulation_time = 86400.0
+while current_time < simulation_time:
+    block_arrival_time = np.random.exponential(600.0)
+    current_time += block_arrival_time
 
-def p_i(t):
-    theta = float(np.arcsin(1 / (np.sqrt(D))))
-    return Decimal((np.sin(2*((t * intvl * GIPS) + 0.5) * theta))**2)
+    if current_time < simulation_time:
+        block_times.append(current_time)
 
-alice_strats = [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1]]
-bob_strats = [[1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3], [3, 1], [3, 2], [3, 3]]
-
-print('A1:')
-for i in range(len(alice_strats)):
-    as1, as2 = alice_strats[i]
-    bs1, bs2 = bob_strats[i]
-
-    if as1 < bs1:
-        print('CASE ONE')
-    elif bs1 <= as1 < bs1 + bs2:
-        print('CASE TWO')
-    elif as1 >= bs1 + bs2:
-        print('CASE THREE')
-    else:
-        print('NO CASE')
-
-print('A2:')
-for i in range(len(alice_strats)):
-    as1, as2 = alice_strats[i]
-    bs1, bs2 = bob_strats[i]
-
-    if as1 + as2 < bs1:
-        print('CASE ONE')
-    elif bs1 <= as1 + as2 < bs1 + bs2:
-        print('CASE TWO')
-    elif as1 + as2 >= bs1 + bs2:
-        print('CASE THREE')
-    else:
-        print('NO CASE')
+print(block_times)
+print(np.average([y - x for x, y in zip(block_times, block_times[1:])]))
