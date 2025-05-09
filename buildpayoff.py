@@ -109,7 +109,6 @@ def print_results(result: np.ndarray, player: str, K: int, num_plays: int, intvl
 
     return 
 
-
 def get_nash_eq_old(A: list, B: list, K: int, num_plays: int, intvl: int) -> None:
     mat_dim = len(A[0])
     tableaux, basic_vars = lh.create_tableau(A, B)

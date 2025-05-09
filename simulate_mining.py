@@ -3,276 +3,319 @@ import numpy as np
 import random
 import math
 
-class QuantumMiningSimulation:
+class QuantumMiningSimulator:
     def __init__(self,
-                nash_equilibrium: dict[str, list[tuple[list[float], float]]],
-                intvl: int, #the number of iterations per interval
-                num_simulations: int = 10000,
-                classical_block_rate: float = 1/600, #blocks per second: 1 every ~ 10 minutes 
-                quantum_simulation_time: float = 86400.0, #one day in seconds
-                difficulty: float =  82047028459932.62 #current network difficulty
-                ) -> None:
-        
-        self.nash_eq = nash_equilibrium
-        self.intvl = intvl  
+                 nash_equilibrium: dict[str, list[tuple[list[float], float]]],
+                 intvl: int,
+                 num_simulations: int = 1000,
+                 classical_block_rate: float = 1/600, #blocks per second: 1 every 10 minutes
+                 quantum_simulation_time: float = 86400.0, #seconds in a day
+                 difficulty: float = 82047028459932.62, #current difficulty
+    ) -> None:
+        self.nash_equilibrium = nash_equilibrium
+        self.intvl = intvl
         self.num_simulations = num_simulations
         self.classical_block_rate = classical_block_rate
-        self.quantum_simulation_time = quantum_simulation_time #time over which to do the simulation by default this is one day 
+        self.quantum_simulation_time = quantum_simulation_time
         self.difficulty = difficulty
+        self.optimal_iterations = np.floor(np.pi / 4 * np.sqrt(difficulty))
 
     def measurement_probability(self, iterations: int) -> float:
-        return (math.sin(2 * (iterations + 1/2) * math.asin(1/np.sqrt(self.difficulty)))**2)
-
+        theta = math.asin(1 / math.sqrt(self.difficulty))
+        probability = (math.sin((2 * iterations + 1) * theta))**2
+        return probability
+    
     def select_strategy(self) -> tuple[list[float], list[float]]:
-        alice_strats = self.nash_eq['Alice']
-        bob_strats = self.nash_eq['Bob']
+        alice_strats = self.nash_equilibrium['Alice']
+        bob_strats = self.nash_equilibrium['Bob']
 
-        alice_strategy = random.choices(
+        alice_chosen_strat = random.choices(
             [strat[0] for strat in alice_strats],
             weights = [strat[1] for strat in alice_strats]
         )[0]
 
-        bob_strategy = random.choices(
+        bob_chosen_strat = random.choices(
             [strat[0] for strat in bob_strats],
             weights = [strat[1] for strat in bob_strats]
         )[0]
 
-        return (alice_strategy, bob_strategy)
-    
-    def time_to_iterations(self, time: float) -> int: 
-        optimal_iterations = np.floor(np.pi / 4 * np.sqrt(self.difficulty))
-        time_per_iteration = 600 / optimal_iterations
+        return alice_chosen_strat, bob_chosen_strat
 
-        return time // time_per_iteration
+    def time_to_iterations(self, time: float) -> int:
+        seconds_per_iteration = 600 / self.optimal_iterations
+        return time / seconds_per_iteration
     
     def iterations_to_time(self, iterations: int) -> float:
-        optimal_iterations = np.floor(np.pi / 4 * np.sqrt(self.difficulty))
-        time_per_iteration = 600 / optimal_iterations
-
-        return iterations * time_per_iteration
-
-    def generate_quantum_measurement_times(self, strategy: list[float], current_time: float = 0.0) -> list[float]:
-        optimal_iterations = np.floor(np.pi / 4 * np.sqrt(self.difficulty))
-        time_per_iteration = 600 / optimal_iterations
-        measurement_times: list[float] = []
-        
-        for iterations in strategy:
-            time_for_iterations = iterations * time_per_iteration
-            current_time += time_for_iterations
-            if current_time <= self.quantum_simulation_time:
-                measurement_times.append(current_time)
-            else:
-                break
+        seconds_per_iteration = 600 / self.optimal_iterations
+        return iterations * seconds_per_iteration
     
-        return measurement_times
-    
-    def generate_classical_block_times(self, current_time = 0.0) -> list[float]:
-        block_times: list[float] = []
-
-        while current_time < self.quantum_simulation_time:
+    def generate_classical_block_times(self, current_time: float = 0.0) -> list[float]:
+        block_times = []
+        while True:  
             block_arrival_time = np.random.exponential(1/self.classical_block_rate)
-            current_time += block_arrival_time
+            next_block_time = current_time + block_arrival_time
 
-            if current_time < self.quantum_simulation_time:
-                block_times.append(current_time)
-            else:
-                break
+            if next_block_time >= self.quantum_simulation_time:
+                break 
 
+            block_times.append(next_block_time)
+            current_time = next_block_time
+ 
         return block_times
     
-    def simulate_single_run(
-        self,
-        quantum_strategy: tuple[list[float], list[float]],
-        classical_block_times: list[float],
-        initial_classical_index: int,
-        initial_current_time: float
-    ) -> tuple[int, int, float, int, list[float]]:
+    def generate_quantum_measurement_times(self, strategy: list[float], start_time: float) -> list[float]:
+        measurement_times = []
+        seconds_per_iterations = 600 / self.optimal_iterations
+        local_current_time = start_time
 
-        # returns the number of blocks added, number of forks, total time elapsed, and the new classical index
-        alice_strat, bob_strat = quantum_strategy
-        alice_measurement_times = self.generate_quantum_measurement_times(alice_strat, initial_current_time)
-        bob_measurement_times = self.generate_quantum_measurement_times(bob_strat, initial_current_time)
+        for iterations in strategy:
+            time_for_iterations = iterations * seconds_per_iterations
+            local_current_time += time_for_iterations
+            measurement_times.append(local_current_time) 
+
+        return measurement_times
+    
+    def simulate_single_run(
+            self,
+            quantum_strategies: tuple[list[float], list[float]],
+            classical_block_times: list[float],
+            classical_block_times_index: int,
+            current_time: float
+    ) -> tuple[int, int, float, list[float], int]:
+        
+        alice_strat, bob_strat = quantum_strategies
+        alice_measurement_times = self.generate_quantum_measurement_times(alice_strat, current_time)
+        bob_measurement_times = self.generate_quantum_measurement_times(bob_strat, current_time)
+
+        alice_index = 0
+        bob_index = 0
+
+        last_alice_measured_time = current_time
+        last_bob_measured_time = current_time
 
         num_blocks = 0
         num_forks = 0
 
-        classical_index = initial_classical_index
-        alice_index = 0
-        bob_index = 0
-
-        last_alice_measured_time = initial_current_time
-        last_bob_measured_time = initial_current_time
-
-        current_time = initial_current_time  # track the total time of the simulation
-
-        optimal_iterations = np.floor(np.pi / 4 * np.sqrt(self.difficulty))
-
-        # Simulate until we have used up all of our measurement and block times.
-        while alice_index < len(alice_measurement_times) or bob_index < len(bob_measurement_times) or classical_index < len(
-                classical_block_times):
-            # determine when is the next event
+        while alice_index < len(alice_measurement_times) or bob_index < len(bob_measurement_times) or classical_block_times_index < len(classical_block_times):
             events = [
-                (alice_measurement_times[alice_index] if alice_index < len(alice_measurement_times) else float('inf'),
-                'Alice'),  # get next alice block time
-                (bob_measurement_times[bob_index] if bob_index < len(bob_measurement_times) else float('inf'),
-                'Bob'),  # get next bob block time
-                (classical_block_times[classical_index] if classical_index < len(classical_block_times) else float('inf'),
-                'Classical')  # get next classical block time
+                (alice_measurement_times[alice_index] if alice_index < len(alice_measurement_times) else math.inf, 'Alice'),
+                (bob_measurement_times[bob_index] if bob_index < len(bob_measurement_times) else math.inf, 'Bob'),  
+                (classical_block_times[classical_block_times_index] if classical_block_times_index < len(classical_block_times) else math.inf, 'Classical')
             ]
-
-            # sort by the time
             events.sort(key=lambda x: x[0])
 
-            next_event_time, event_type = events[0]
+            # Handle simultaneous events
+            event_time = events[0][0]
+            simultaneous_events = [event for event in events if event[0] == event_time]
 
-            if next_event_time > self.quantum_simulation_time:
-                return num_blocks, num_forks, current_time, classical_index, classical_block_times
+            current_time = event_time
+            if current_time > self.quantum_simulation_time:
+                return num_blocks, num_forks, current_time, classical_block_times, classical_block_times_index
 
-            current_time = next_event_time  # Advance current time *always*
-
-            if event_type == 'Classical':
-                num_blocks += 1
-
-                # Alice and Bob Measure Independently (regardless of success, the time has passed)
-                r_alice = random.random()
-                alice_aggressive_iterations = self.time_to_iterations(
-                    current_time - last_alice_measured_time)  if last_alice_measured_time > 0 else 0
-                if r_alice <= self.measurement_probability(alice_aggressive_iterations):
-                    num_forks += 1
-
-                r_bob = random.random()
-                bob_aggressive_iterations = self.time_to_iterations(
-                    current_time - last_bob_measured_time)  if last_bob_measured_time > 0 else 0
-                if r_bob <= self.measurement_probability(bob_aggressive_iterations):
-                    num_forks += 1
-
-                # set the last measured times to current time
-                last_alice_measured_time = current_time
-                last_bob_measured_time = current_time
-
-                classical_index += 1  # increment classical index
-
-                # Since this is a classical block, return right away
-                return num_blocks, num_forks, current_time, classical_index, classical_block_times
-
-            elif event_type == 'Alice':  # alice is making a measurement
+            # Alice and Bob simultaneous event
+            if len(simultaneous_events) == 2 and 'Alice' in [e[1] for e in simultaneous_events] and 'Bob' in [e[1] for e in simultaneous_events]:
                 r_alice = random.random()
                 alice_iterations = alice_strat[alice_index]
-                last_alice_measured_time = current_time  # Update Alice's last measurement time (always, strategical time)
-
-                # check if this measurement was successful, if so, then create a new block and calculate forks.
-                if r_alice <= self.measurement_probability(int(alice_iterations)):
-                    num_blocks += 1
-
-                    # if Alice has a successful measurement, Bob may also try to fork. Check the time difference.
-                    r_bob = random.random()
-                    bob_aggressive_iterations = self.time_to_iterations(
-                        current_time - last_bob_measured_time) if last_bob_measured_time > 0 else 0
-                    if r_bob <= self.measurement_probability(bob_aggressive_iterations):
-                        num_forks += 1
-
-                    last_bob_measured_time = current_time  # also set bob to current
-
-                    # Since there is a quantum block, return the new set and also reset the index
-                    classical_block_times = self.generate_classical_block_times(current_time=current_time)
-                    alice_measurement_times = self.generate_quantum_measurement_times(alice_strat,
-                                                                                        current_time)  # regen times
-                    bob_measurement_times = self.generate_quantum_measurement_times(bob_strat,
-                                                                                    current_time)
-                    alice_index = 0
-                    bob_index = 0
-                    return num_blocks, num_forks, current_time, 0, classical_block_times  # reset classical index
-
-                alice_index += 1  # move to the next measurement for alice
-
-            elif event_type == 'Bob':  # bob is making a measurement
+                
                 r_bob = random.random()
                 bob_iterations = bob_strat[bob_index]
-                last_bob_measured_time = current_time  # Update Bob's last measurement time (always, strategical time)
 
-                # check if this measurement was successful, if so, then create a new block and calculate forks.
-                if r_bob <= self.measurement_probability(int(bob_iterations)):
+                alice_success = r_alice <= self.measurement_probability(int(alice_iterations))
+                bob_success = r_bob <= self.measurement_probability(int(bob_iterations))
+
+                if alice_success:
+                    num_blocks += 1
+                if bob_success:
                     num_blocks += 1
 
-                    # check for forks here, also use that last_alice_measured is 0 if it is the first block
-                    r_alice = random.random()
-                    alice_aggressive_iterations = self.time_to_iterations(
-                        current_time - last_alice_measured_time) if last_alice_measured_time > 0 else 0
-                    if r_alice <= self.measurement_probability(alice_aggressive_iterations):
-                        num_forks += 1
+                if alice_success or bob_success:
+                    classical_block_times = self.generate_classical_block_times(current_time)
+                    return num_blocks, num_forks, current_time, classical_block_times, 0
 
-                    last_alice_measured_time = current_time
-
-                    # Since there is a quantum block, return the new times and index
-                    classical_block_times = self.generate_classical_block_times(current_time=current_time)
-                    alice_measurement_times = self.generate_quantum_measurement_times(alice_strat,
-                                                                                        current_time)  # regen times
-                    bob_measurement_times = self.generate_quantum_measurement_times(bob_strat,
-                                                                                    current_time)
-                    alice_index = 0
-                    bob_index = 0
-                    return num_blocks, num_forks, current_time, 0, classical_block_times  # reset classical index
-
+                alice_index += 1
                 bob_index += 1
 
-        return num_blocks, num_forks, current_time, classical_index, classical_block_times
+            # Classical and Alice simultaneous event
+            elif len(simultaneous_events) == 2 and 'Classical' in [e[1] for e in simultaneous_events] and 'Alice' in [e[1] for e in simultaneous_events]:
+                num_blocks += 1
+                r_alice = random.random()
+                alice_iterations = alice_strat[alice_index]
+                last_alice_measured_time = current_time
 
+                if r_alice <= self.measurement_probability(int(alice_iterations)):
+                    num_blocks += 1
+                    num_forks += 1
 
+                    #Bob attempts to mine aggressively
+                    if bob_index < len(bob_strat):
+                        r_bob = random.random()
+                        bob_aggressive_iterations = self.time_to_iterations(current_time - last_bob_measured_time)
+                        if r_bob <= self.measurement_probability(int(bob_aggressive_iterations)):
+                            num_blocks += 1
+                            num_forks += 1
+                        last_bob_measured_time = current_time
+
+                    classical_block_times = self.generate_classical_block_times(current_time)
+                    return num_blocks, num_forks, current_time, classical_block_times, 0
+                else:
+                    alice_index += 1
+                    classical_block_times_index += 1
+                    return num_blocks, num_forks, current_time, classical_block_times, classical_block_times_index
+
+            # Classical and Bob simultaneous event
+            elif len(simultaneous_events) == 2 and 'Classical' in [e[1] for e in simultaneous_events] and 'Bob' in [e[1] for e in simultaneous_events]:
+                num_blocks += 1
+                r_bob = random.random()
+                bob_iterations = bob_strat[bob_index]
+                last_bob_measured_time = current_time
+
+                if r_bob <= self.measurement_probability(int(bob_iterations)):
+                    num_blocks += 1
+                    num_forks += 1
+
+                    #Alice attempts to mine aggressively
+                    if alice_index < len(alice_strat):
+                        r_alice = random.random()
+                        alice_aggressive_iterations = self.time_to_iterations(current_time - last_alice_measured_time)
+                        if r_alice <= self.measurement_probability(int(alice_aggressive_iterations)):
+                            num_blocks += 1
+                            num_forks += 1
+                        
+                        last_alice_measured_time = current_time
+
+                    classical_block_times = self.generate_classical_block_times(current_time)
+                    return num_blocks, num_forks, current_time, classical_block_times, 0
+                else:
+                    bob_index += 1
+                    classical_block_times_index += 1
+                    return num_blocks, num_forks, current_time, classical_block_times, classical_block_times_index
+
+            # If only one event happened
+            else:
+                event_type = simultaneous_events[0][1]
+                if event_type == 'Alice':
+                    r_alice = random.random()
+                    alice_iterations = alice_strat[alice_index]
+                    last_alice_measured_time = current_time
+
+                    if r_alice <= self.measurement_probability(int(alice_iterations)):
+                        num_blocks += 1
+
+                        # Bob attempts to fork aggressively
+                        if bob_index < len(bob_strat):
+                            r_bob = random.random()
+                            bob_aggressive_iterations = self.time_to_iterations(current_time - last_bob_measured_time)
+                            if r_bob <= self.measurement_probability(int(bob_aggressive_iterations)):
+                                num_blocks += 1
+                                num_forks += 1
+
+                            last_bob_measured_time = current_time
+
+                        classical_block_times = self.generate_classical_block_times(current_time)
+                        return num_blocks, num_forks, current_time, classical_block_times, 0
+                    else:
+                        alice_index += 1
+
+                elif event_type == 'Bob':
+                    r_bob = random.random()
+                    bob_iterations = bob_strat[bob_index]
+                    last_bob_measured_time = current_time
+
+                    if r_bob <= self.measurement_probability(int(bob_iterations)):
+                        num_blocks += 1
+
+                        # Alice attempts to fork aggressively
+                        if alice_index < len(alice_strat):
+                            r_alice = random.random()
+                            alice_aggressive_iterations = self.time_to_iterations(current_time - last_alice_measured_time)
+                            if r_alice <= self.measurement_probability(int(alice_aggressive_iterations)):
+                                num_blocks += 1
+                                num_forks += 1
+
+                            last_alice_measured_time = current_time
+
+                        classical_block_times = self.generate_classical_block_times(current_time)
+                        return num_blocks, num_forks, current_time, classical_block_times, 0
+                    else:
+                        bob_index += 1
+
+                elif event_type == 'Classical':
+                    num_blocks += 1
+
+                    # Alice and Bob will attempt to mine aggressively
+                    if alice_index < len(alice_strat):
+                        r_alice = random.random()
+                        alice_aggressive_iterations = self.time_to_iterations(current_time - last_alice_measured_time)
+                        if r_alice <= self.measurement_probability(int(alice_aggressive_iterations)):
+                            num_blocks += 1
+                            num_forks += 1
+
+                        last_alice_measured_time = current_time
+
+                    if bob_index < len(bob_strat):
+                        r_bob = random.random()
+                        bob_aggressive_iterations = self.time_to_iterations(current_time - last_bob_measured_time)
+                        if r_bob <= self.measurement_probability(int(bob_aggressive_iterations)):
+                            num_blocks += 1
+                            num_forks += 1
+
+                        last_bob_measured_time = current_time
+
+                    classical_block_times_index += 1
+                    return num_blocks, num_forks, current_time, classical_block_times, classical_block_times_index
+
+        return num_blocks, num_forks, current_time, classical_block_times, classical_block_times_index
+    
     def simulate(self) -> tuple[float, float, float]:
-        #returns the average fork rate, the average block rate, and average simulation time
-
-        total_forks = 0.0
-        total_blocks = 0.0
-        total_sim_time = 0.0
-
-        classical_block_times = self.generate_classical_block_times()
-        classical_index = 0
+        total_blocks = 0
+        total_forks = 0
         current_time = 0.0
+        classical_block_times = self.generate_classical_block_times(current_time)
+        classical_block_times_index = 0
 
         while current_time < self.quantum_simulation_time:
             quantum_strategies = self.select_strategy()
-            num_blocks, num_forks, sim_time, classical_index, classical_block_times = self.simulate_single_run(quantum_strategies, classical_block_times, classical_index, current_time)
-            total_blocks += num_blocks
-            total_forks += num_forks
-            total_sim_time += sim_time
+            blocks_found, forks, current_time, classical_block_times, classical_block_times_index = self.simulate_single_run(
+                quantum_strategies,
+                classical_block_times,
+                classical_block_times_index,
+                current_time
+            )
 
-            if current_time + sim_time >= self.quantum_simulation_time:
+            if current_time >= self.quantum_simulation_time: 
                 break
 
-            current_time += sim_time
+            total_blocks += blocks_found
+            total_forks += forks
 
-        avg_fork_rate = total_forks / total_blocks if total_blocks > 0 else 0 
-        avg_block_rate = total_blocks / total_sim_time if total_sim_time > 0 else 0
-        return avg_fork_rate, avg_block_rate, total_sim_time
+        average_fork_rate = total_forks / total_blocks
+        return average_fork_rate, total_blocks, total_forks
 
     def simulate_all(self) -> tuple[float, float, float]:
-        #returns the average fork rate, the average block rate (per second), and average simulation time
-
-        total_forks = 0.0
+        total_fork_rate = 0.0
         total_blocks = 0.0
-        total_sim_time = 0.0
+        total_forks = 0.0
 
         for _ in range(self.num_simulations):
-            avg_fork_rate, avg_block_rate, sim_time = self.simulate()
+            fork_rate, blocks_found, forks = self.simulate()
+            total_fork_rate += fork_rate
+            total_blocks += blocks_found
+            total_forks += forks
 
-            total_forks += avg_fork_rate
-            total_blocks += avg_block_rate
-            total_sim_time += sim_time
+        average_fork_rate = total_fork_rate / self.num_simulations
+        average_blocks = total_blocks / self.num_simulations
+        average_forks = total_forks / self.num_simulations
 
-        avg_fork_rate = total_forks / self.num_simulations
-        avg_block_rate = total_blocks / self.num_simulations
-        return avg_fork_rate, avg_block_rate, total_sim_time / self.num_simulations
+        return average_fork_rate, average_blocks, average_forks
     
 def main():
     fname = 'output.txt'
     analyzer = NashEquilibriaAnalyzer()
     nash_eq = analyzer.converge(fname)
-    simulator = QuantumMiningSimulation(nash_eq, intvl = analyzer.intvl, num_simulations = 1, difficulty = analyzer.D)
 
-    avg_fork_rate, avg_block_rate, avg_sim_time = simulator.simulate_all()
-    print('Average Fork Rate: ', avg_fork_rate)
-    print('Average Block Rate: ', avg_block_rate)
-    print('Average Simulation Time: ', avg_sim_time)
+    simulator = QuantumMiningSimulator(nash_eq, 1, num_simulations = 100000)
+    avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
+    print(avg_fork_rate, avg_blocks, avg_forks)
 
-if __name__ == '__main__':
+if __name__  == '__main__':
     main()
