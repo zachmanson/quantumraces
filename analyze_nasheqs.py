@@ -26,7 +26,7 @@ class NashEquilibriaAnalyzer:
     
     def parse_list(self, s: str) -> list[float]:
         s = s.strip('[]')
-        cleaned_s = s.replace('np.float64(', '').replace(')', '')
+        cleaned_s = s.replace('np.int64(', '').replace(')', '')
         return [float(x) for x in cleaned_s.split(',')]
     
     def parse_data(self, data: list[str]) -> list[dict[str, list[tuple[list[float], float]]]]:

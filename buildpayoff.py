@@ -109,6 +109,7 @@ def print_results(result: np.ndarray, player: str, K: int, num_plays: int, intvl
 
     return 
 
+
 def get_nash_eq_old(A: list, B: list, K: int, num_plays: int, intvl: int) -> None:
     mat_dim = len(A[0])
     tableaux, basic_vars = lh.create_tableau(A, B)
@@ -135,7 +136,7 @@ def get_nash_eq(A: np.ndarray, B: np.ndarray, K: int, num_plays: int, intvl: int
     g = gt.NormalFormGame((mat_dim, mat_dim))
     for row in range(mat_dim):
         for col in range(mat_dim):
-            g[row, col] =A[row][col], B[row][col]
+            g[row, col] = A[row][col], B[row][col]
 
     nash_eqs = []
     with open('output.txt', 'w') as f:
@@ -165,8 +166,9 @@ def get_payoff_element(alice_strat: list, bob_strat: list, num_plays: int, K: fl
     return payoff
 
 def main():
-    K = 20 #number of pure strategies
-    num_plays = 3 #number of plays
+    K = 5 #number of pure strategies
+    num_plays = 2 #number of plays
+    D = 50
     D = 82047028459932.62
     #D = 52328312063444
     max_K = np.floor(np.pi / 4 * np.sqrt(D))

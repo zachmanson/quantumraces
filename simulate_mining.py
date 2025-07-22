@@ -2,23 +2,27 @@ from analyze_nasheqs import NashEquilibriaAnalyzer
 import numpy as np
 import random
 import math
+from buildpayoffgambit import BuildPayoff
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 
 class QuantumMiningSimulator:
     def __init__(self,
                  nash_equilibrium: dict[str, list[tuple[list[float], float]]],
-                 intvl: int,
-                 num_simulations: int = 1000,
+                 num_simulations: int = 100000,
                  classical_block_rate: float = 1/600, #blocks per second: 1 every 10 minutes
                  quantum_simulation_time: float = 86400.0, #seconds in a day
-                 difficulty: float = 82047028459932.62, #current difficulty
+                 difficulty: float = 119116256505723.5, #current difficulty
+                 #difficulty: float = 3651011.631, #difficulty from 2013 (low D)
+                 beta: float = 1.0 #fraction of optimal iterations
     ) -> None:
         self.nash_equilibrium = nash_equilibrium
-        self.intvl = intvl
         self.num_simulations = num_simulations
         self.classical_block_rate = classical_block_rate
         self.quantum_simulation_time = quantum_simulation_time
         self.difficulty = difficulty
         self.optimal_iterations = np.floor(np.pi / 4 * np.sqrt(difficulty))
+        self.seconds_per_iteration = 600 / (beta * self.optimal_iterations)
 
     def measurement_probability(self, iterations: int) -> float:
         theta = math.asin(1 / math.sqrt(self.difficulty))
@@ -42,12 +46,10 @@ class QuantumMiningSimulator:
         return alice_chosen_strat, bob_chosen_strat
 
     def time_to_iterations(self, time: float) -> int:
-        seconds_per_iteration = 600 / self.optimal_iterations
-        return time / seconds_per_iteration
+        return time / self.seconds_per_iteration
     
     def iterations_to_time(self, iterations: int) -> float:
-        seconds_per_iteration = 600 / self.optimal_iterations
-        return iterations * seconds_per_iteration
+        return iterations * self.seconds_per_iteration
     
     def generate_classical_block_times(self, current_time: float = 0.0) -> list[float]:
         block_times = []
@@ -146,7 +148,7 @@ class QuantumMiningSimulator:
                     num_blocks += 1
                     num_forks += 1
 
-                    #Bob attempts to mine aggressively
+                    #Bob employs the AQMS
                     if bob_index < len(bob_strat):
                         r_bob = random.random()
                         bob_aggressive_iterations = self.time_to_iterations(current_time - last_bob_measured_time)
@@ -173,7 +175,7 @@ class QuantumMiningSimulator:
                     num_blocks += 1
                     num_forks += 1
 
-                    #Alice attempts to mine aggressively
+                    #Alice employs the AQMS
                     if alice_index < len(alice_strat):
                         r_alice = random.random()
                         alice_aggressive_iterations = self.time_to_iterations(current_time - last_alice_measured_time)
@@ -201,7 +203,7 @@ class QuantumMiningSimulator:
                     if r_alice <= self.measurement_probability(int(alice_iterations)):
                         num_blocks += 1
 
-                        # Bob attempts to fork aggressively
+                        # Bob employs the AQMS
                         if bob_index < len(bob_strat):
                             r_bob = random.random()
                             bob_aggressive_iterations = self.time_to_iterations(current_time - last_bob_measured_time)
@@ -224,7 +226,7 @@ class QuantumMiningSimulator:
                     if r_bob <= self.measurement_probability(int(bob_iterations)):
                         num_blocks += 1
 
-                        # Alice attempts to fork aggressively
+                        # Alice employs the AQMS
                         if alice_index < len(alice_strat):
                             r_alice = random.random()
                             alice_aggressive_iterations = self.time_to_iterations(current_time - last_alice_measured_time)
@@ -242,7 +244,7 @@ class QuantumMiningSimulator:
                 elif event_type == 'Classical':
                     num_blocks += 1
 
-                    # Alice and Bob will attempt to mine aggressively
+                    # Alice and Bob will employ the AQMS
                     if alice_index < len(alice_strat):
                         r_alice = random.random()
                         alice_aggressive_iterations = self.time_to_iterations(current_time - last_alice_measured_time)
@@ -297,6 +299,7 @@ class QuantumMiningSimulator:
         total_forks = 0.0
 
         for _ in range(self.num_simulations):
+            #print('Simulation {} of {}'.format(_ + 1, self.num_simulations))
             fork_rate, blocks_found, forks = self.simulate()
             total_fork_rate += fork_rate
             total_blocks += blocks_found
@@ -308,14 +311,136 @@ class QuantumMiningSimulator:
 
         return average_fork_rate, average_blocks, average_forks
     
+def simulate_across_betas(K: int, num_plays: int, D: float, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int):
+    betas = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
+    fork_rates = []
+    for beta in betas:
+        print(beta)
+        payoff_builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, out_fname, scale_with_D = True)
+        A = payoff_builder.get_payoff()
+        B = payoff_builder.get_payoff(bob = True)
+
+        payoff_builder.get_nash_eq_pygambit(A, B)
+
+        print('Nash equilibrium found!')
+        analyzer = NashEquilibriaAnalyzer()
+        nash_eq = analyzer.converge(out_fname)
+
+        print('Beginning simulation...')
+        simulator = QuantumMiningSimulator(nash_eq, num_simulations, beta = beta)
+        avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
+        print('Simulation complete!')
+        print('Average Fork Rate:', avg_fork_rate)
+        fork_rates.append(avg_fork_rate)
+
+    thresholds = [(1 - x)/(2 - x) for x in fork_rates]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))  # 1 row, 2 columns
+
+    axes[0].plot(betas, fork_rates, 'o-')
+    axes[0].set_xlabel('Fraction of total search space')
+    axes[0].set_ylabel('Average Fork Rate')
+    axes[0].set_title('Network fork rate due to quantum mining')
+    axes[0].grid(True)
+
+    axes[1].plot(betas, thresholds, 'o-')
+    axes[1].set_xlabel('Fraction of total search space')
+    axes[1].set_ylabel('51% Threshold')
+    axes[1].set_title('Network 51 threshold due to quantum mining')
+    axes[1].grid(True)
+
+    plt.tight_layout()
+    plt.savefig('fork_rate_and_threshold.png')
+    plt.show()
+
+def format_func(x, pos):
+    return f'$2^{{{int(np.log2(x))}}}$'
+
+def simulate_across_difficulties(K: int, num_plays: int, beta: float, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int):
+    difficulties = [2**30, 2**31, 2**32, 2**33, 2**34, 2**35, 2**36, 2**37, 2**38, 2**39, 2**40, 2**41, 2**42]
+    fork_rates = []
+    for difficulty in difficulties:
+        print(difficulty)
+        payoff_builder = BuildPayoff(K, num_plays, difficulty, clustering_factor, gamma, beta, out_fname, scale_with_D = False)
+        A = payoff_builder.get_payoff()
+        B = payoff_builder.get_payoff(bob = True)
+
+        payoff_builder.get_nash_eq_pygambit(A, B)
+
+        print('Nash equilibrium found!')
+        analyzer = NashEquilibriaAnalyzer()
+        nash_eq = analyzer.converge(out_fname)
+
+        print('Beginning simulation...')
+        simulator = QuantumMiningSimulator(nash_eq, num_simulations, difficulty=difficulty)
+        avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
+        print('Simulation complete!')
+        print('Average Fork Rate:', avg_fork_rate)
+        fork_rates.append(avg_fork_rate)
+
+
+    thresholds = [(1 - x)/(2 - x) for x in fork_rates]   
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True)
+
+    axes[0].plot(difficulties, fork_rates, 'o-', label='Fork Rate')
+    axes[0].set_xscale('log', base=2)
+    axes[0].xaxis.set_major_formatter(FuncFormatter(format_func))
+    axes[0].set_xlabel('$D$')
+    axes[0].set_ylabel('Average Fork Rate')
+    axes[0].set_title(f'Fork Rate ($c = {num_plays}$)')
+    axes[0].grid(True)
+
+    axes[1].plot(difficulties, thresholds, 's--', color='red', label='Threshold')
+    axes[1].set_xscale('log', base=2)
+    axes[1].xaxis.set_major_formatter(FuncFormatter(format_func))
+    axes[1].set_xlabel('$D$')
+    axes[1].set_ylabel('Threshold')
+    axes[1].set_title(f'51 % Threshold ($c = {num_plays}$)')
+    axes[1].grid(True)
+
+    axes[0].legend()
+    axes[1].legend()
+
+    plt.tight_layout()
+    plt.savefig('fork_rate_and_thresholds_side_by_side_c3.png')
+    plt.show()
+    
 def main():
     fname = 'output.txt'
     analyzer = NashEquilibriaAnalyzer()
     nash_eq = analyzer.converge(fname)
 
-    simulator = QuantumMiningSimulator(nash_eq, 1, num_simulations = 100000)
+    '''
+    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000)
+    print('Simulating {} runs...'.format(10000000))
     avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
-    print(avg_fork_rate, avg_blocks, avg_forks)
+    print('Simulation complete!')
+    print('Average Fork Rate:', avg_fork_rate)
+    print('Average Blocks Found Per Day:', avg_blocks)
+    print('Average Forks Found Per Day:', avg_forks)
+    '''
+    
+    simulate_across_betas(
+        K = 20,
+        num_plays = 2,
+        D = 119116256505723.5,
+        clustering_factor = 2.0,
+        gamma = 0.5,
+        out_fname = 'betas_output.txt',
+        num_simulations = 10000
+    )
+    '''
+    simulate_across_difficulties(
+        K = 10, 
+        num_plays= 3, 
+        beta = 1.0, 
+        clustering_factor = 2.0,
+        gamma = 0.5,
+        out_fname = 'difficulties_output.txt',
+        num_simulations = 10000
+    )
+    '''
+    
 
 if __name__  == '__main__':
     main()

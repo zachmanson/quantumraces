@@ -1,37 +1,39 @@
+import re
 import numpy as np
-import math
 
-# Example values (replace with your actual values)
-difficulty = 82047028459932.62
-classical_block_rate = 1/600
+def parse_and_sum_probabilities(text):
+    blocks = text.strip().split("-------------")
+    results = []
 
+    for block_num, block in enumerate(blocks):
+        alice_sum = 0.0
+        bob_sum = 0.0
+        lines = block.strip().split("\n")
+        
+        for line in lines:
+            match = re.match(r"(Alice|Bob)\s+\[.*?\]\s+([0-9\.eE+-]+)", line)
+            if match:
+                name = match.group(1)
+                prob = float(match.group(2))
+                if name == "Alice":
+                    alice_sum += prob
+                elif name == "Bob":
+                    bob_sum += prob
 
-def time_to_iterations(time: float, difficulty: float) -> int:
-    optimal_iterations = np.floor(np.pi / 4 * np.sqrt(difficulty))
-    time_per_iteration = 600 / optimal_iterations  # Assumes 600s block time for classical
-    return int(time // time_per_iteration)
+        results.append((block_num + 1, alice_sum, bob_sum))
 
-def iterations_to_time(iterations: int, difficulty: float) -> float:
-    optimal_iterations = np.floor(np.pi / 4 * np.sqrt(difficulty))
-    time_per_iteration = 600 / optimal_iterations
-    return iterations * time_per_iteration
+    return results
 
-# Test Cases
-test_times = [0.1, 1, 60, 600, 3600, 86400]  # Seconds
-print(f"Difficulty: {difficulty}")
-print(f"Classical Block Rate: {classical_block_rate}")
-print("\n--- Time to Iterations ---")
-for time in test_times:
-    iterations = time_to_iterations(time, difficulty)
-    print(f"Time: {time:.2f}s, Iterations: {iterations}")
+# Example usage
+if __name__ == "__main__":
+    # Replace this with reading from a file if needed
+    with open("output.txt", "r") as f:
+        input_text = f.read()
 
-print("\n--- Iterations to Time & Back to Iterations (Consistency Check) ---")
-test_iterations = [1, 10, 100, 1000, 10000, 100000]
-for n in test_iterations:
-    time = iterations_to_time(n, difficulty)
-    iterations_back = time_to_iterations(time, difficulty)
-    print(f"Original Iterations: {n}, Time: {time:.2f}s, Iterations Back: {iterations_back}")
-
-# Print optimal iterations value
-optimal_iterations = np.floor(np.pi / 4 * np.sqrt(difficulty))
-print(f'\nOptimal iterations: {optimal_iterations}')
+    results = parse_and_sum_probabilities(input_text)
+    
+    for i, alice_total, bob_total in results:
+        print(f"Block {i}:")
+        print(f"  Alice total probability: {alice_total:.10f}")
+        print(f"  Bob total probability:   {bob_total:.10f}")
+        print()
