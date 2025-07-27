@@ -312,7 +312,8 @@ class QuantumMiningSimulator:
         return average_fork_rate, average_blocks, average_forks
     
 def simulate_across_betas(K: int, num_plays: int, D: float, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int):
-    betas = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
+    #betas goes from 0 to num_plays in increments of 0.25
+    betas = [x * 0.25 for x in range(1, int(num_plays * 4) + 1)]
     fork_rates = []
     for beta in betas:
         print(beta)
@@ -350,7 +351,7 @@ def simulate_across_betas(K: int, num_plays: int, D: float, clustering_factor: i
     axes[1].grid(True)
 
     plt.tight_layout()
-    plt.savefig('fork_rate_and_threshold.png')
+    plt.savefig('fork_rate_and_threshold_c3.png')
     plt.show()
 
 def format_func(x, pos):
@@ -411,7 +412,7 @@ def main():
     nash_eq = analyzer.converge(fname)
 
     '''
-    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000)
+    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 10000000)
     print('Simulating {} runs...'.format(10000000))
     avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
     print('Simulation complete!')
@@ -421,13 +422,13 @@ def main():
     '''
     
     simulate_across_betas(
-        K = 20,
-        num_plays = 2,
+        K = 10,
+        num_plays = 3,
         D = 119116256505723.5,
         clustering_factor = 2.0,
         gamma = 0.5,
         out_fname = 'betas_output.txt',
-        num_simulations = 10000
+        num_simulations = 100000
     )
     '''
     simulate_across_difficulties(
@@ -437,7 +438,7 @@ def main():
         clustering_factor = 2.0,
         gamma = 0.5,
         out_fname = 'difficulties_output.txt',
-        num_simulations = 10000
+        num_simulations = 10000000
     )
     '''
     

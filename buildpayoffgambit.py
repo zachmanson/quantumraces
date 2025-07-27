@@ -36,7 +36,8 @@ class BuildPayoff:
         linear_grid = np.linspace(0, 1, self.K + 1)
         quadratic_grid = 1 - (1 - linear_grid)**self.clustering_factor
         scaled_grid = quadratic_grid * self.max_K
-        return np.round(scaled_grid).astype(int)
+        return [750, 1500]
+        #return np.round(scaled_grid).astype(int)
 
     def grid_to_iterations(self, grid_point: int) -> int:
         return self.grid[grid_point]
@@ -143,6 +144,7 @@ class BuildPayoff:
         strat_length = len(cartesian_element) // 2
         alice_strat = cartesian_element[strat_length:]
         bob_strat = cartesian_element[:strat_length]
+        #print("Row:", row, "Col:", col, "Alice's strategy:", alice_strat, "Bob's strategy:", bob_strat)
 
         assert play <= strat_length, 'Only {} plays are allowed in this game, got {}'.format(strat_length, play)
 
@@ -192,7 +194,7 @@ class BuildPayoff:
         
         # Find a Nash equilibrium using Gambit
         # Using LCP solver which is equivalent to Lemke-Howson
-        results = pygambit.nash.lcp_solve(game, rational=True, stop_after = 3)
+        results = pygambit.nash.lcp_solve(game, rational=True, stop_after = 1)
         
         with open(self.out_fname, 'w') as f:
             sys.stdout = f
@@ -248,7 +250,7 @@ class BuildPayoff:
 
 
 def main():
-    K = 25 #number of pure strategies
+    K = 1 #number of pure strategies (including 0 so K=1 means 2 strategies)
     num_plays = 2 #number of plays
     #D = 82047028459932.62
     #D = 119116256505723.5 #difficulty as of May 9 2025
@@ -259,7 +261,7 @@ def main():
     
     payoff_builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, scale_with_D=True)
     
-    #payoff_builder.test_quadratic_grid()
+    payoff_builder.test_quadratic_grid()
     
     print("Building payoff matrices...")
     A = payoff_builder.get_payoff()

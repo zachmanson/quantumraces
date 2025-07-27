@@ -107,3 +107,18 @@ class NashEquilibriaAnalyzer:
         expected_payoffs = self.calculate_expected_payoffs(nash_eqs)
         chosen_eq = self.choose_eq(nash_eqs, expected_payoffs)
         return chosen_eq
+    
+
+if __name__ == "__main__":
+    #print the expected payoffs of the nash equilibria
+    analyzer = NashEquilibriaAnalyzer()
+    nash_eq = analyzer.converge('nash_eqs.txt')
+    for player, strategies in nash_eq.items():
+        print(f"{player}:")
+        for strategy, value in strategies:
+            print(f"  Strategy: {strategy}, Value: {value}")
+    print("Expected Payoffs:")
+    expected_payoffs = analyzer.calculate_expected_payoffs([nash_eq])
+    for ep in expected_payoffs:
+        print(f"Alice: {ep[0]}, Bob: {ep[1]}")
+        

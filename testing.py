@@ -1,39 +1,30 @@
-import re
 import numpy as np
+import math
 
-def parse_and_sum_probabilities(text):
-    blocks = text.strip().split("-------------")
-    results = []
+D = 3651011.631  # difficulty as of Feb 26 2013
+gamma = 0.5
+def p(k: int, D: float) -> float:
+    return np.float64((math.sin(2 * ((k) + 1/2) * math.asin(1/np.sqrt(D))))**2)
 
-    for block_num, block in enumerate(blocks):
-        alice_sum = 0.0
-        bob_sum = 0.0
-        lines = block.strip().split("\n")
-        
-        for line in lines:
-            match = re.match(r"(Alice|Bob)\s+\[.*?\]\s+([0-9\.eE+-]+)", line)
-            if match:
-                name = match.group(1)
-                prob = float(match.group(2))
-                if name == "Alice":
-                    alice_sum += prob
-                elif name == "Bob":
-                    bob_sum += prob
+x = p(750, D)
+y = p(1500, D)
 
-        results.append((block_num + 1, alice_sum, bob_sum))
 
-    return results
+a_100 = x * (1 - x) + gamma * x * x
+a_200 = x * (1 - x) * (1 - x) * (1 - x) + gamma * x * x
 
-# Example usage
-if __name__ == "__main__":
-    # Replace this with reading from a file if needed
-    with open("output.txt", "r") as f:
-        input_text = f.read()
 
-    results = parse_and_sum_probabilities(input_text)
-    
-    for i, alice_total, bob_total in results:
-        print(f"Block {i}:")
-        print(f"  Alice total probability: {alice_total:.10f}")
-        print(f"  Bob total probability:   {bob_total:.10f}")
-        print()
+a_133 = y * (1 - y) + gamma * y * y
+a_233 = y * (1 - y) * (1 - y) * (1 - y) + gamma * y * y
+
+a_101 = a_100 
+a_201 = x * (1 - x) * (1 - x) + gamma * x * p(1500 - 750, D)
+
+A_00 = a_100 + a_200
+print(A_00)
+
+A_33 = a_133 + a_233
+print(A_33)
+
+A_01 = a_101 + a_201
+print(A_01)
