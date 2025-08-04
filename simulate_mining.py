@@ -2,9 +2,10 @@ from analyze_nasheqs import NashEquilibriaAnalyzer
 import numpy as np
 import random
 import math
-from buildpayoffgambit import BuildPayoff
+from buildpayoff import BuildPayoff
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
+from mpl_toolkits.mplot3d import Axes3D
 
 class QuantumMiningSimulator:
     def __init__(self,
@@ -311,6 +312,8 @@ class QuantumMiningSimulator:
 
         return average_fork_rate, average_blocks, average_forks
     
+    
+    
 def simulate_across_betas(K: int, num_plays: int, D: float, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int):
     #betas goes from 0 to num_plays in increments of 0.25
     betas = [x * 0.25 for x in range(1, int(num_plays * 4) + 1)]
@@ -328,10 +331,10 @@ def simulate_across_betas(K: int, num_plays: int, D: float, clustering_factor: i
         nash_eq = analyzer.converge(out_fname)
 
         print('Beginning simulation...')
-        simulator = QuantumMiningSimulator(nash_eq, num_simulations, beta = beta)
+        simulator = QuantumMiningSimulator(nash_eq, difficulty=D, num_simulations=num_simulations, beta=beta)
         avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
         print('Simulation complete!')
-        print('Average Fork Rate:', avg_fork_rate)
+        print('Average Stale Rate:', avg_fork_rate)
         fork_rates.append(avg_fork_rate)
 
     thresholds = [(1 - x)/(2 - x) for x in fork_rates]
@@ -339,19 +342,19 @@ def simulate_across_betas(K: int, num_plays: int, D: float, clustering_factor: i
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))  # 1 row, 2 columns
 
     axes[0].plot(betas, fork_rates, 'o-')
-    axes[0].set_xlabel('Fraction of total search space')
-    axes[0].set_ylabel('Average Fork Rate')
-    axes[0].set_title('Network fork rate due to quantum mining')
+    axes[0].set_xlabel('$\\beta$')
+    axes[0].set_ylabel('Average Stale Rate')
+    axes[0].set_title('Network Stale Rate due to Quantum Mining')
     axes[0].grid(True)
 
     axes[1].plot(betas, thresholds, 'o-')
-    axes[1].set_xlabel('Fraction of total search space')
+    axes[1].set_xlabel('$\\beta$')
     axes[1].set_ylabel('51% Threshold')
-    axes[1].set_title('Network 51 threshold due to quantum mining')
+    axes[1].set_title('Network 51% Threshold due to Quantum Mining')
     axes[1].grid(True)
 
     plt.tight_layout()
-    plt.savefig('fork_rate_and_threshold_c3.png')
+    plt.savefig('stale_rate_and_threshold.png')
     plt.show()
 
 def format_func(x, pos):
@@ -376,19 +379,19 @@ def simulate_across_difficulties(K: int, num_plays: int, beta: float, clustering
         simulator = QuantumMiningSimulator(nash_eq, num_simulations, difficulty=difficulty)
         avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
         print('Simulation complete!')
-        print('Average Fork Rate:', avg_fork_rate)
+        print('Average Stale Rate:', avg_fork_rate)
         fork_rates.append(avg_fork_rate)
 
 
     thresholds = [(1 - x)/(2 - x) for x in fork_rates]   
     fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True)
 
-    axes[0].plot(difficulties, fork_rates, 'o-', label='Fork Rate')
+    axes[0].plot(difficulties, fork_rates, 'o-', label='Stale Rate')
     axes[0].set_xscale('log', base=2)
     axes[0].xaxis.set_major_formatter(FuncFormatter(format_func))
     axes[0].set_xlabel('$D$')
-    axes[0].set_ylabel('Average Fork Rate')
-    axes[0].set_title(f'Fork Rate ($c = {num_plays}$)')
+    axes[0].set_ylabel('Average Stale Rate')
+    axes[0].set_title(f'Stale Rate ($c = {num_plays}$)')
     axes[0].grid(True)
 
     axes[1].plot(difficulties, thresholds, 's--', color='red', label='Threshold')
@@ -403,27 +406,106 @@ def simulate_across_difficulties(K: int, num_plays: int, beta: float, clustering
     axes[1].legend()
 
     plt.tight_layout()
-    plt.savefig('fork_rate_and_thresholds_side_by_side_c3.png')
+    plt.savefig('fork_rate_and_thresholds_side_by_side.png')
     plt.show()
     
+
+def simulate_across_difficulties_and_betas(K: int, num_plays: int, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int):
+    exponents = list(range(30, 41)) 
+    difficulties = [2**e for e in exponents]
+    #betas goes from 0.5 to num_plays in increments of 0.25
+    betas = [x * 0.25 for x in range(2, int(num_plays * 4) + 1)]
+
+    fork_rate_matrix = np.zeros((len(difficulties), len(betas)))
+    high_fork_results = []  # Store results with Stale Rate >= 0.33
+
+    for i, difficulty in enumerate(difficulties):
+        for j, beta in enumerate(betas):
+            print(f'D={difficulty}, β={beta}')
+            payoff_builder = BuildPayoff(K, num_plays, D = difficulty, clustering_factor = clustering_factor, gamma = gamma, beta = beta, out_fname = out_fname, scale_with_D = False, stop_after = 1)
+            A = payoff_builder.get_payoff()
+            B = payoff_builder.get_payoff(bob=True)
+            payoff_builder.get_nash_eq_pygambit(A, B)
+            
+            analyzer = NashEquilibriaAnalyzer()
+            nash_eq = analyzer.converge(out_fname)
+
+            simulator = QuantumMiningSimulator(nash_eq, num_simulations=num_simulations, difficulty=difficulty, beta=beta)
+            avg_fork_rate, _, _ = simulator.simulate_all()
+            fork_rate_matrix[i, j] = avg_fork_rate
+            
+            # Collect high Stale Rate results
+            if avg_fork_rate >= 0.33:
+                high_fork_results.append({
+                    'difficulty': difficulty,
+                    'log2_difficulty': int(np.log2(difficulty)),
+                    'beta': beta,
+                    'fork_rate': avg_fork_rate
+                })
+
+    # Print results table at the end
+    if high_fork_results:
+        print("\n" + "="*80)
+        print("HIGH Stale Rate RESULTS (≥ 0.33)")
+        print("="*80)
+        print(f"{'Difficulty (D)':<15} {'Log₂(D)':<8} {'Beta (β)':<10} {'Stale Rate':<12}")
+        print("-" * 80)
+        
+        # Sort by Stale Rate (highest first)
+        high_fork_results.sort(key=lambda x: x['fork_rate'], reverse=True)
+        
+        for result in high_fork_results:
+            print(f"{result['difficulty']:<15} {result['log2_difficulty']:<8} {result['beta']:<10.2f} {result['fork_rate']:<12.4f}")
+        
+        print("-" * 80)
+        print(f"Total combinations with high Stale Rate: {len(high_fork_results)}")
+        print("="*80)
+    else:
+        print("\n" + "="*50)
+        print("No combinations resulted in Stale Rate ≥ 0.33")
+        print("="*50)
+
+    # Create meshgrid for plotting
+    D_log = np.log2(difficulties)
+    D_mesh, beta_mesh = np.meshgrid(D_log, betas, indexing='ij')
+
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    ax.plot_surface(D_mesh, beta_mesh, fork_rate_matrix, cmap='viridis')
+    ax.set_xlabel('$\\log_2 D$')
+    ax.set_ylabel('$\\beta$')
+    ax.set_zlabel('Stale Rate')
+    ax.set_title('Bitcoin Network Stale Rate due to Quantum Mining')
+    plt.tight_layout()
+    plt.savefig('fork_rate_vs_D_and_beta_c3.png')
+    plt.show()
+
+
 def main():
     fname = 'output.txt'
     analyzer = NashEquilibriaAnalyzer()
     nash_eq = analyzer.converge(fname)
 
+    #D = 82047028459932.62
+    D = 119116256505723.5 #difficulty as of May 9 2025
+    #D = 3651011.631 #difficulty as of Feb 26 2013
+    beta = 2.0  # fraction of max_K that can be applied in block mining window
+
     '''
-    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 10000000)
+    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 1000000, difficulty = D, beta = beta)
     print('Simulating {} runs...'.format(10000000))
     avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
     print('Simulation complete!')
-    print('Average Fork Rate:', avg_fork_rate)
+    print('Average Stale Rate:', avg_fork_rate)
     print('Average Blocks Found Per Day:', avg_blocks)
     print('Average Forks Found Per Day:', avg_forks)
     '''
     
+    '''
     simulate_across_betas(
-        K = 10,
-        num_plays = 3,
+        K = 12,
+        num_plays = 2,
         D = 119116256505723.5,
         clustering_factor = 2.0,
         gamma = 0.5,
@@ -431,17 +513,26 @@ def main():
         num_simulations = 100000
     )
     '''
+    '''
     simulate_across_difficulties(
-        K = 10, 
-        num_plays= 3, 
+        K = 12, 
+        num_plays= 2, 
         beta = 1.0, 
         clustering_factor = 2.0,
         gamma = 0.5,
         out_fname = 'difficulties_output.txt',
-        num_simulations = 10000000
+        num_simulations = 100000
     )
     '''
-    
+
+    simulate_across_difficulties_and_betas(
+        K = 5,
+        num_plays = 3,
+        clustering_factor = 2.0,
+        gamma = 0.5,
+        out_fname = 'combo_output.txt',
+        num_simulations = 10000 
+    )    
 
 if __name__  == '__main__':
     main()

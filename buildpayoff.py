@@ -8,11 +8,12 @@ from functools import lru_cache
 import matplotlib.pyplot as plt
 
 class BuildPayoff:
-    def __init__(self, K: int, num_plays: int, D: float, clustering_factor: float = 1.0, gamma: float = 0.5, beta: float = 1.0, out_fname = 'output.txt', scale_with_D: bool = False):
+    def __init__(self, K: int, num_plays: int, D: float, clustering_factor: float = 1.0, gamma: float = 0.5, beta: float = 1.0, out_fname = 'output.txt', scale_with_D: bool = False, stop_after: int = 1):
         self.K = K
         self.num_plays = num_plays
         self.D = D
         self.scale_with_D = scale_with_D
+        self.stop_after = stop_after
 
         if self.scale_with_D:
             self.max_K = np.floor(np.pi / 4 * np.sqrt(self.D))
@@ -135,51 +136,38 @@ class BuildPayoff:
     
     def get_aggressive_part(self, row_strat: list[int], col_strat: list[int], play: int, row_cum: int) -> np.float64:
         current_row_iterations = self.grid_to_iterations(row_strat[play - 1])
-
-        col_first_strat = self.grid_to_iterations(col_strat[0])
-        if row_cum < col_first_strat: 
-            return (self.p(current_row_iterations, self.D))**2
         
+        # find Bob's most recent measurement before Alice's current cumulative iterations
         col_cumulative = [self.get_cumulative_iterations(col_strat, i + 1) for i in range(len(col_strat))]
-
-        num_col_measurements = 0
-        for col_cum in col_cumulative:
-            if row_cum >= col_cum:
-                num_col_measurements += 1
+        
+        # find the index ell of Bob's most recent measurement before row_cum
+        ell = 0  
+        bob_last_cum = 0  
+        
+        for j, col_cum in enumerate(col_cumulative):
+            if col_cum < row_cum:
+                ell = j + 1  # j+1 because col_cumulative is 0-indexed but we want 1-indexed
+                bob_last_cum = col_cum
             else:
                 break
         
-        if row_cum < col_cumulative[0]:
-            return (self.p(current_row_iterations, self.D))**2
+        # calculate product 
+        product_term = np.float64(1.0)
         
-        for i, col_cum in enumerate(col_cumulative):
-            if row_cum < col_cum:
-                #col player has run out of measurement opportunities
-                if num_col_measurements > self.num_plays:
-                    return np.float64(0.0)
-            
-                if i == 0:
-                    col_partial_iterations = row_cum
-                else:
-                    prev_col_cum = col_cumulative[i - 1]
-                    col_partial_iterations = row_cum - prev_col_cum
-
-                return self.p(current_row_iterations, self.D) * self.p(col_partial_iterations, self.D)
-                
-            elif row_cum == col_cum:
-                if num_col_measurements > self.num_plays:
-                    return np.float64(0.0)
-                
-                current_col_iterations = self.grid_to_iterations(col_strat[i])
-
-                return self.p(current_row_iterations, self.D) * self.p(current_col_iterations, self.D)
+        for k in range(play - 1):  
+            alice_cum_k = self.get_cumulative_iterations(row_strat, k + 1) 
+            if alice_cum_k > bob_last_cum:
+                alice_iterations_k = self.grid_to_iterations(row_strat[k])
+                product_term *= (1 - self.p(alice_iterations_k, self.D))
         
-        if num_col_measurements > self.num_plays:
-            return np.float64(0.0)
-        else:
-            last_col_cum = col_cumulative[-1]
-            col_partial_iterations = row_cum - last_col_cum
-            return self.p(current_row_iterations, self.D) * self.p(col_partial_iterations, self.D)
+        # calculate Bob's AQMS iterations: A_i - B_ell
+        bob_aqms_iterations = row_cum - bob_last_cum
+        
+        aqms_term = (self.p(current_row_iterations, self.D) * 
+                    product_term * 
+                    self.p(bob_aqms_iterations, self.D))
+        
+        return np.float64(aqms_term)
 
     def print_results(self, result: list, player: str) -> None:
         set_K = np.arange(0, self.K + 1)
@@ -207,8 +195,8 @@ class BuildPayoff:
         
         # Find a Nash equilibrium using Gambit
         # Using LCP solver which is equivalent to Lemke-Howson
-        results = pygambit.nash.lcp_solve(game, rational=True, stop_after = 1)
-        
+        results = pygambit.nash.lcp_solve(game, rational=True, stop_after=self.stop_after)
+
         with open(self.out_fname, 'w') as f:
             sys.stdout = f
             for eq in results.equilibria:
@@ -226,7 +214,7 @@ class BuildPayoff:
         return
 
     def get_payoff_element(self, row_strat: list, col_strat: list) -> np.float64:
-        total_payoff = 0
+        total_payoff = np.float64(0.0)
         for play in range(1, self.num_plays + 1):
             total_payoff += self.calculate_payoff_for_play(row_strat, col_strat, play)
         return np.float64(total_payoff)
@@ -254,16 +242,17 @@ class BuildPayoff:
         print("\nGrid distribution plot saved as 'quadratic_grid_distribution.png'")
 
 def main():
-    K = 10 #number of pure strategies (including 0 so K=1 means 2 strategies)
+    K = 25 #number of pure strategies (including 0 so K=1 means 2 strategies)
     num_plays = 2 #number of plays
     #D = 82047028459932.62
-    #D = 119116256505723.5 #difficulty as of May 9 2025
-    D = 3651011.631 #difficulty as of Feb 26 2013
+    D = 119116256505723.5 #difficulty as of May 9 2025
+    #D = 3651011.631 #difficulty as of Feb 26 2013
     clustering_factor = 2.0
     gamma = 0.5
     beta = 1.0  # fraction of max_K that can be applied in block mining window
 
-    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta)
+    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, scale_with_D = True, stop_after = 3)
+    builder.test_quadratic_grid()
     A = builder.get_payoff()
     B = builder.get_payoff(bob=True)
     print("Payoff matrix for Alice:")
