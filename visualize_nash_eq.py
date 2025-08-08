@@ -203,7 +203,7 @@ def create_single_heatmaps(equilibria_data):
         
         # Create annotation strings (empty for zero values)
         annot_strings = np.where(heatmap_data > 0, 
-                                np.vectorize(lambda x: f'{x:.2f}')(heatmap_data), 
+                                np.vectorize(lambda x: f'{x:.4f}')(heatmap_data), 
                                 '')
         
         # Create heatmap
@@ -380,7 +380,7 @@ def main():
         # Create single large heatmaps (no splitting)
         fig_list_heatmaps = create_single_heatmaps(equilibria_data)
         for i, fig in enumerate(fig_list_heatmaps):
-            filename = f'heatmap_{i+1}_low.png'
+            filename = f'heatmap_{i+1}_c3_high.png'
             fig.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
             print(f"   {filename}")
         

@@ -490,10 +490,10 @@ def main():
     #D = 82047028459932.62
     D = 119116256505723.5 #difficulty as of May 9 2025
     #D = 3651011.631 #difficulty as of Feb 26 2013
-    beta = 2.0  # fraction of max_K that can be applied in block mining window
+    beta = 3.0  # fraction of max_K that can be applied in block mining window
 
     '''
-    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 1000000, difficulty = D, beta = beta)
+    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000, difficulty = D, beta = beta)
     print('Simulating {} runs...'.format(10000000))
     avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
     print('Simulation complete!')
@@ -501,7 +501,6 @@ def main():
     print('Average Blocks Found Per Day:', avg_blocks)
     print('Average Forks Found Per Day:', avg_forks)
     '''
-    
     '''
     simulate_across_betas(
         K = 12,
@@ -526,12 +525,12 @@ def main():
     '''
 
     simulate_across_difficulties_and_betas(
-        K = 5,
+        K = 6,
         num_plays = 3,
         clustering_factor = 2.0,
         gamma = 0.5,
         out_fname = 'combo_output.txt',
-        num_simulations = 10000 
+        num_simulations = 20000 
     )    
 
 if __name__  == '__main__':

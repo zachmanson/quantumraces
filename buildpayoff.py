@@ -178,6 +178,59 @@ class BuildPayoff:
                 print('{} {} {}'.format(player, strat, value))
         return 
 
+    def analyze_extreme_payoffs(self, A: np.ndarray, B: np.ndarray, player_name: str = "Alice") -> None:
+        """
+        Find and print the grid combinations that result in highest and lowest payoffs.
+        Handles ties by printing all combinations that achieve the extreme values.
+        """
+        matrix = A if player_name == "Alice" else B
+        
+        # Get the cartesian product of strategies
+        set_K = np.arange(0, self.K + 1)
+        cart_prod = cartesian((set_K for x in range(self.num_plays)))
+        
+        # Find max and min values
+        max_val = np.max(matrix)
+        min_val = np.min(matrix)
+        
+        print(f"\n=== EXTREME PAYOFF ANALYSIS FOR {player_name.upper()} ===")
+        print(f"Maximum payoff: {max_val}")
+        print(f"Minimum payoff: {min_val}")
+        
+        # Find all positions with max values
+        max_positions = np.where(matrix == max_val)
+        max_row_col_pairs = list(zip(max_positions[0], max_positions[1]))
+        
+        # Find all positions with min values  
+        min_positions = np.where(matrix == min_val)
+        min_row_col_pairs = list(zip(min_positions[0], min_positions[1]))
+        
+        print(f"\nMAXIMUM PAYOFF COMBINATIONS (Value: {max_val}):")
+        print(f"Found {len(max_row_col_pairs)} combination(s)")
+        
+        for i, (row_idx, col_idx) in enumerate(max_row_col_pairs):
+            row_strat_indices = cart_prod[row_idx]
+            col_strat_indices = cart_prod[col_idx]
+            
+            row_strat_iterations = [self.grid_to_iterations(x) for x in row_strat_indices]
+            col_strat_iterations = [self.grid_to_iterations(x) for x in col_strat_indices]
+            
+            print(f"  {i+1}. Row strategy (indices): {list(row_strat_indices)} -> Iterations: {row_strat_iterations}")
+            print(f"     Col strategy (indices): {list(col_strat_indices)} -> Iterations: {col_strat_iterations}")
+        
+        print(f"\nMINIMUM PAYOFF COMBINATIONS (Value: {min_val}):")
+        print(f"Found {len(min_row_col_pairs)} combination(s)")
+        
+        for i, (row_idx, col_idx) in enumerate(min_row_col_pairs):
+            row_strat_indices = cart_prod[row_idx]
+            col_strat_indices = cart_prod[col_idx]
+            
+            row_strat_iterations = [self.grid_to_iterations(x) for x in row_strat_indices]
+            col_strat_iterations = [self.grid_to_iterations(x) for x in col_strat_indices]
+            
+            print(f"  {i+1}. Row strategy (indices): {list(row_strat_indices)} -> Iterations: {row_strat_iterations}")
+            print(f"     Col strategy (indices): {list(col_strat_indices)} -> Iterations: {col_strat_iterations}")
+
     def get_nash_eq_pygambit(self, A: np.ndarray, B: np.ndarray) -> None:
         A_float = np.nan_to_num(A, nan=0.0, posinf=0.0, neginf=0.0)
         B_float = np.nan_to_num(B, nan=0.0, posinf=0.0, neginf=0.0)
@@ -242,16 +295,16 @@ class BuildPayoff:
         print("\nGrid distribution plot saved as 'quadratic_grid_distribution.png'")
 
 def main():
-    K = 25 #number of pure strategies (including 0 so K=1 means 2 strategies)
-    num_plays = 2 #number of plays
+    K = 10 #number of pure strategies (including 0 so K=1 means 2 strategies)
+    num_plays = 3 #number of plays
     #D = 82047028459932.62
-    D = 119116256505723.5 #difficulty as of May 9 2025
-    #D = 3651011.631 #difficulty as of Feb 26 2013
+    #D = 119116256505723.5 #difficulty as of May 9 2025
+    D = 3651011.631 #difficulty as of Feb 26 2013
     clustering_factor = 2.0
     gamma = 0.5
-    beta = 1.0  # fraction of max_K that can be applied in block mining window
+    beta = 3.0  # fraction of max_K that can be applied in block mining window
 
-    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, scale_with_D = True, stop_after = 3)
+    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, scale_with_D = True, stop_after = 2)
     builder.test_quadratic_grid()
     A = builder.get_payoff()
     B = builder.get_payoff(bob=True)
@@ -261,6 +314,9 @@ def main():
     print(B)
 
     print('Payoff matrices created!')
+    
+    #builder.analyze_extreme_payoffs(A, B, "Alice")
+    
     builder.get_nash_eq_pygambit(A, B)
 
 
