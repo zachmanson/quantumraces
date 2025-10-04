@@ -155,7 +155,7 @@ def create_improved_3d_plots(equilibria_data):
     return figures
 
 def create_single_heatmaps(equilibria_data):
-    """Create single large heatmaps with unique strategies on x-axis."""
+    """Create single large heatmaps with unique strategies on x-axis and hardcoded subplot label."""
     
     figures = []
     
@@ -173,7 +173,7 @@ def create_single_heatmaps(equilibria_data):
         # Create figure
         n_strategies = len(unique_strategies)
         fig_width = max(12, n_strategies * 0.8)
-        fig, ax = plt.subplots(figsize=(fig_width, 8))
+        fig, ax = plt.subplots(figsize=(fig_width, 9))
         
         # Create strategy labels
         strategy_labels = []
@@ -201,27 +201,19 @@ def create_single_heatmaps(equilibria_data):
             
             heatmap_data[player_idx, strat_idx] = prob
         
-        # Create annotation strings (empty for zero values)
-        annot_strings = np.where(heatmap_data > 0, 
-                                np.vectorize(lambda x: f'{x:.4f}')(heatmap_data), 
-                                '')
-        
-        # Create heatmap
+        # Create heatmap WITHOUT annotations (numbers)
         sns.heatmap(heatmap_data, 
                    xticklabels=strategy_labels,
                    yticklabels=unique_players,
-                   annot=annot_strings,
+                   annot=False,
                    fmt='',
                    cmap='YlOrRd',
                    ax=ax,
                    cbar_kws={'label': 'Probability'},
-                   annot_kws={'size': 8, 'weight': 'bold'},
                    linewidths=0.5,
                    vmin=0)
         
         # Title and labels
-        ax.set_title(f'Nash Equilibrium {eq_idx + 1} - Strategy Probabilities', 
-                    fontsize=18, fontweight='bold', pad=20)
         ax.set_xlabel('Unique Strategy Profiles', fontsize=14, fontweight='bold')
         ax.set_ylabel('Players', fontsize=14, fontweight='bold')
         
@@ -234,13 +226,18 @@ def create_single_heatmaps(equilibria_data):
         cbar.ax.tick_params(labelsize=11)
         cbar.set_label('Probability', fontsize=12, fontweight='bold')
         
-        plt.tight_layout()
+        # Adjust layout to make room for bottom label
+        plt.subplots_adjust(bottom=0.25)
+        
+        ## ADD SUBPLOT LABEL BELOW FIGURE (hardcoded - change as needed)
+        #label = '(c)'  # Change this to whatever label you want
+        #ax.text(0.5, -0.25, label, fontsize=16, fontweight='bold', ha='center', va='top', transform=ax.transAxes)
+        
         figures.append(fig)
     
     return figures
 
 def create_equilibrium_histograms(equilibria_data):
-    """Create probability histograms for each Nash equilibrium."""
     
     figures = []
     
@@ -356,9 +353,8 @@ def print_improved_summary(equilibria_data):
 def main():
     """Main function - only histograms and heatmaps."""
     
-    # CONFIGURATION
-    #STRATEGY_TOTAL = 8571866.0
-    STRATEGY_TOTAL = 1500.0
+    STRATEGY_TOTAL = 8571866.0
+    #STRATEGY_TOTAL = 1500.0
     
     try:
         equilibria_data = parse_nash_eqs('output.txt', strategy_total=STRATEGY_TOTAL)
@@ -373,21 +369,21 @@ def main():
         # Create 3D histograms (blue/yellow for Alice/Bob)
         fig_list_3d = create_improved_3d_plots(equilibria_data)
         for i, fig in enumerate(fig_list_3d):
-            filename = f'3d_histogram_{i+1}.png'
+            filename = f'images/3d_histogram_{i+1}.png'
             fig.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
             print(f"   {filename}")
         
-        # Create single large heatmaps (no splitting)
+        # Create single large heatmaps (no splitting, no numbers)
         fig_list_heatmaps = create_single_heatmaps(equilibria_data)
         for i, fig in enumerate(fig_list_heatmaps):
-            filename = f'heatmap_{i+1}_c3_high.png'
+            filename = f'images/heatmap_{i+1}_c2_ideal_BTQ.png'
             fig.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
             print(f"   {filename}")
         
         # Create histograms (blue/yellow for Alice/Bob)
         fig_list_histograms = create_equilibrium_histograms(equilibria_data)
         for i, fig in enumerate(fig_list_histograms):
-            filename = f'histogram_{i+1}.png'
+            filename = f'images/histogram_{i+1}.png'
             fig.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
             print(f"   {filename}")
         

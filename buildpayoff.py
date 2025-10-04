@@ -291,20 +291,20 @@ class BuildPayoff:
         plt.xlabel("Grid Index")
         plt.ylabel("Grover Iterations")
         plt.grid(True)
-        plt.savefig("quadratic_grid_distribution.png")
+        plt.savefig("images/quadratic_grid_distribution.png")
         print("\nGrid distribution plot saved as 'quadratic_grid_distribution.png'")
 
 def main():
-    K = 10 #number of pure strategies (including 0 so K=1 means 2 strategies)
+    K =  15 #number of pure strategies (including 0 so K=1 means 2 strategies)
     num_plays = 3 #number of plays
     #D = 82047028459932.62
-    #D = 119116256505723.5 #difficulty as of May 9 2025
-    D = 3651011.631 #difficulty as of Feb 26 2013
+    D = 119116256505723.5 #difficulty as of May 9 2025
+    #D = 3651011.631 #difficulty as of Feb 26 2013
     clustering_factor = 2.0
     gamma = 0.5
-    beta = 3.0  # fraction of max_K that can be applied in block mining window
+    beta = 1.0  # fraction of max_K that can be applied in block mining window
 
-    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, scale_with_D = True, stop_after = 2)
+    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, scale_with_D = True, stop_after = 1)
     builder.test_quadratic_grid()
     A = builder.get_payoff()
     B = builder.get_payoff(bob=True)

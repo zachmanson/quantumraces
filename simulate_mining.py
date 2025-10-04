@@ -6,6 +6,7 @@ from buildpayoff import BuildPayoff
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.mplot3d import Axes3D
+import pandas as pd
 
 class QuantumMiningSimulator:
     def __init__(self,
@@ -354,7 +355,7 @@ def simulate_across_betas(K: int, num_plays: int, D: float, clustering_factor: i
     axes[1].grid(True)
 
     plt.tight_layout()
-    plt.savefig('stale_rate_and_threshold.png')
+    plt.savefig('images/stale_rate_and_threshold.png')
     plt.show()
 
 def format_func(x, pos):
@@ -406,11 +407,11 @@ def simulate_across_difficulties(K: int, num_plays: int, beta: float, clustering
     axes[1].legend()
 
     plt.tight_layout()
-    plt.savefig('fork_rate_and_thresholds_side_by_side.png')
+    plt.savefig('images/fork_rate_and_thresholds_side_by_side.png')
     plt.show()
     
 
-def simulate_across_difficulties_and_betas(K: int, num_plays: int, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int):
+def simulate_across_difficulties_and_betas(K: int, num_plays: int, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int, csv_filename: str = None):
     exponents = list(range(30, 41)) 
     difficulties = [2**e for e in exponents]
     #betas goes from 0.5 to num_plays in increments of 0.25
@@ -418,6 +419,9 @@ def simulate_across_difficulties_and_betas(K: int, num_plays: int, clustering_fa
 
     fork_rate_matrix = np.zeros((len(difficulties), len(betas)))
     high_fork_results = []  # Store results with Stale Rate >= 0.33
+    
+    # Create lists to store all data points for CSV export
+    csv_data = []
 
     for i, difficulty in enumerate(difficulties):
         for j, beta in enumerate(betas):
@@ -434,6 +438,15 @@ def simulate_across_difficulties_and_betas(K: int, num_plays: int, clustering_fa
             avg_fork_rate, _, _ = simulator.simulate_all()
             fork_rate_matrix[i, j] = avg_fork_rate
             
+            # Store data for CSV export
+            csv_data.append({
+                'difficulty': difficulty,
+                'log2_difficulty': int(np.log2(difficulty)),
+                'beta': beta,
+                'stale_rate': avg_fork_rate,
+                'threshold': (1 - avg_fork_rate) / (2 - avg_fork_rate)
+            })
+            
             # Collect high Stale Rate results
             if avg_fork_rate >= 0.33:
                 high_fork_results.append({
@@ -442,6 +455,15 @@ def simulate_across_difficulties_and_betas(K: int, num_plays: int, clustering_fa
                     'beta': beta,
                     'fork_rate': avg_fork_rate
                 })
+
+    # Save data to CSV
+    if csv_filename is None:
+        csv_filename = f'simulation_data_K{K}_c{num_plays}.csv'
+    
+    df = pd.DataFrame(csv_data)
+    df.to_csv(csv_filename, index=False)
+    print(f"\nSimulation data saved to: {csv_filename}")
+    print(f"CSV contains {len(csv_data)} data points")
 
     # Print results table at the end
     if high_fork_results:
@@ -473,12 +495,11 @@ def simulate_across_difficulties_and_betas(K: int, num_plays: int, clustering_fa
     ax = fig.add_subplot(111, projection='3d')
 
     ax.plot_surface(D_mesh, beta_mesh, fork_rate_matrix, cmap='viridis')
-    ax.set_xlabel('$\\log_2 D$')
+    ax.set_xlabel('$\\log_2(D)$')
     ax.set_ylabel('$\\beta$')
     ax.set_zlabel('Stale Rate')
-    ax.set_title('Bitcoin Network Stale Rate due to Quantum Mining')
     plt.tight_layout()
-    plt.savefig('fork_rate_vs_D_and_beta_c3.png')
+    plt.savefig('images/fork_rate_vs_D_and_beta_c3.png')
     plt.show()
 
 
@@ -490,9 +511,8 @@ def main():
     #D = 82047028459932.62
     D = 119116256505723.5 #difficulty as of May 9 2025
     #D = 3651011.631 #difficulty as of Feb 26 2013
-    beta = 3.0  # fraction of max_K that can be applied in block mining window
+    beta = 1.0  # fraction of max_K that can be applied in block mining window
 
-    '''
     simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000, difficulty = D, beta = beta)
     print('Simulating {} runs...'.format(10000000))
     avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
@@ -500,7 +520,7 @@ def main():
     print('Average Stale Rate:', avg_fork_rate)
     print('Average Blocks Found Per Day:', avg_blocks)
     print('Average Forks Found Per Day:', avg_forks)
-    '''
+
     '''
     simulate_across_betas(
         K = 12,
@@ -524,14 +544,17 @@ def main():
     )
     '''
 
+    '''
     simulate_across_difficulties_and_betas(
         K = 6,
         num_plays = 3,
         clustering_factor = 2.0,
         gamma = 0.5,
         out_fname = 'combo_output.txt',
-        num_simulations = 20000 
+        num_simulations = 20000,
+        csv_filename = 'quantum_mining_simulation_data_c3.csv'  # Optional: specify custom filename
     )    
-
+    '''
+    
 if __name__  == '__main__':
     main()
