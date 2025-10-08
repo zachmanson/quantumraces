@@ -16,15 +16,14 @@ class QuantumMiningSimulator:
                  quantum_simulation_time: float = 86400.0, #seconds in a day
                  difficulty: float = 119116256505723.5, #current difficulty
                  #difficulty: float = 3651011.631, #difficulty from 2013 (low D)
-                 beta: float = 1.0 #fraction of optimal iterations
     ) -> None:
         self.nash_equilibrium = nash_equilibrium
         self.num_simulations = num_simulations
         self.classical_block_rate = classical_block_rate
         self.quantum_simulation_time = quantum_simulation_time
         self.difficulty = difficulty
-        self.optimal_iterations = np.floor(np.pi / 4 * np.sqrt(difficulty))
-        self.seconds_per_iteration = 600 / (beta * self.optimal_iterations)
+        self.optimal_iterations = min(np.floor(np.pi / 4 * np.sqrt(difficulty)),  int(np.floor(np.pi/4 * np.sqrt(2**32))))
+        self.seconds_per_iteration = 600 / (self.optimal_iterations)
 
     def measurement_probability(self, iterations: int) -> float:
         theta = math.asin(1 / math.sqrt(self.difficulty))
@@ -312,61 +311,18 @@ class QuantumMiningSimulator:
         average_forks = total_forks / self.num_simulations
 
         return average_fork_rate, average_blocks, average_forks
-    
-    
-    
-def simulate_across_betas(K: int, num_plays: int, D: float, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int):
-    #betas goes from 0 to num_plays in increments of 0.25
-    betas = [x * 0.25 for x in range(1, int(num_plays * 4) + 1)]
-    fork_rates = []
-    for beta in betas:
-        print(beta)
-        payoff_builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, out_fname, scale_with_D = True)
-        A = payoff_builder.get_payoff()
-        B = payoff_builder.get_payoff(bob = True)
-
-        payoff_builder.get_nash_eq_pygambit(A, B)
-
-        print('Nash equilibrium found!')
-        analyzer = NashEquilibriaAnalyzer()
-        nash_eq = analyzer.converge(out_fname)
-
-        print('Beginning simulation...')
-        simulator = QuantumMiningSimulator(nash_eq, difficulty=D, num_simulations=num_simulations, beta=beta)
-        avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
-        print('Simulation complete!')
-        print('Average Stale Rate:', avg_fork_rate)
-        fork_rates.append(avg_fork_rate)
-
-    thresholds = [(1 - x)/(2 - x) for x in fork_rates]
-
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))  # 1 row, 2 columns
-
-    axes[0].plot(betas, fork_rates, 'o-')
-    axes[0].set_xlabel('$\\beta$')
-    axes[0].set_ylabel('Average Stale Rate')
-    axes[0].set_title('Network Stale Rate due to Quantum Mining')
-    axes[0].grid(True)
-
-    axes[1].plot(betas, thresholds, 'o-')
-    axes[1].set_xlabel('$\\beta$')
-    axes[1].set_ylabel('51% Threshold')
-    axes[1].set_title('Network 51% Threshold due to Quantum Mining')
-    axes[1].grid(True)
-
-    plt.tight_layout()
-    plt.savefig('images/stale_rate_and_threshold.png')
-    plt.show()
 
 def format_func(x, pos):
     return f'$2^{{{int(np.log2(x))}}}$'
 
-def simulate_across_difficulties(K: int, num_plays: int, beta: float, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int):
+def simulate_across_difficulties(K: int, num_plays: int, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int, csv_filename: str = None):
     difficulties = [2**30, 2**31, 2**32, 2**33, 2**34, 2**35, 2**36, 2**37, 2**38, 2**39, 2**40, 2**41, 2**42]
     fork_rates = []
+    csv_data = []
+    
     for difficulty in difficulties:
         print(difficulty)
-        payoff_builder = BuildPayoff(K, num_plays, difficulty, clustering_factor, gamma, beta, out_fname, scale_with_D = False)
+        payoff_builder = BuildPayoff(K, num_plays, difficulty, clustering_factor, gamma, out_fname, scale_with_D = False)
         A = payoff_builder.get_payoff()
         B = payoff_builder.get_payoff(bob = True)
 
@@ -382,126 +338,48 @@ def simulate_across_difficulties(K: int, num_plays: int, beta: float, clustering
         print('Simulation complete!')
         print('Average Stale Rate:', avg_fork_rate)
         fork_rates.append(avg_fork_rate)
+        
+        csv_data.append({
+            'difficulty': difficulty,
+            'log2_difficulty': int(np.log2(difficulty)),
+            'stale_rate': avg_fork_rate,
+            'threshold': (1 - avg_fork_rate) / (2 - avg_fork_rate),
+            'avg_blocks': avg_blocks,
+            'avg_forks': avg_forks
+        })
 
-
-    thresholds = [(1 - x)/(2 - x) for x in fork_rates]   
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True)
-
-    axes[0].plot(difficulties, fork_rates, 'o-', label='Stale Rate')
-    axes[0].set_xscale('log', base=2)
-    axes[0].xaxis.set_major_formatter(FuncFormatter(format_func))
-    axes[0].set_xlabel('$D$')
-    axes[0].set_ylabel('Average Stale Rate')
-    axes[0].set_title(f'Stale Rate ($c = {num_plays}$)')
-    axes[0].grid(True)
-
-    axes[1].plot(difficulties, thresholds, 's--', color='red', label='Threshold')
-    axes[1].set_xscale('log', base=2)
-    axes[1].xaxis.set_major_formatter(FuncFormatter(format_func))
-    axes[1].set_xlabel('$D$')
-    axes[1].set_ylabel('Threshold')
-    axes[1].set_title(f'51 % Threshold ($c = {num_plays}$)')
-    axes[1].grid(True)
-
-    axes[0].legend()
-    axes[1].legend()
-
-    plt.tight_layout()
-    plt.savefig('images/fork_rate_and_thresholds_side_by_side.png')
-    plt.show()
-    
-
-def simulate_across_difficulties_and_betas(K: int, num_plays: int, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int, csv_filename: str = None):
-    exponents = list(range(30, 41)) 
-    difficulties = [2**e for e in exponents]
-    #betas goes from 0.5 to num_plays in increments of 0.25
-    betas = [x * 0.25 for x in range(2, int(num_plays * 4) + 1)]
-
-    fork_rate_matrix = np.zeros((len(difficulties), len(betas)))
-    high_fork_results = []  # Store results with Stale Rate >= 0.33
-    
-    # Create lists to store all data points for CSV export
-    csv_data = []
-
-    for i, difficulty in enumerate(difficulties):
-        for j, beta in enumerate(betas):
-            print(f'D={difficulty}, β={beta}')
-            payoff_builder = BuildPayoff(K, num_plays, D = difficulty, clustering_factor = clustering_factor, gamma = gamma, beta = beta, out_fname = out_fname, scale_with_D = False, stop_after = 1)
-            A = payoff_builder.get_payoff()
-            B = payoff_builder.get_payoff(bob=True)
-            payoff_builder.get_nash_eq_pygambit(A, B)
-            
-            analyzer = NashEquilibriaAnalyzer()
-            nash_eq = analyzer.converge(out_fname)
-
-            simulator = QuantumMiningSimulator(nash_eq, num_simulations=num_simulations, difficulty=difficulty, beta=beta)
-            avg_fork_rate, _, _ = simulator.simulate_all()
-            fork_rate_matrix[i, j] = avg_fork_rate
-            
-            # Store data for CSV export
-            csv_data.append({
-                'difficulty': difficulty,
-                'log2_difficulty': int(np.log2(difficulty)),
-                'beta': beta,
-                'stale_rate': avg_fork_rate,
-                'threshold': (1 - avg_fork_rate) / (2 - avg_fork_rate)
-            })
-            
-            # Collect high Stale Rate results
-            if avg_fork_rate >= 0.33:
-                high_fork_results.append({
-                    'difficulty': difficulty,
-                    'log2_difficulty': int(np.log2(difficulty)),
-                    'beta': beta,
-                    'fork_rate': avg_fork_rate
-                })
-
-    # Save data to CSV
     if csv_filename is None:
-        csv_filename = f'simulation_data_K{K}_c{num_plays}.csv'
+        csv_filename = f'simulation_difficulties_c{num_plays}.csv'
     
     df = pd.DataFrame(csv_data)
     df.to_csv(csv_filename, index=False)
     print(f"\nSimulation data saved to: {csv_filename}")
-    print(f"CSV contains {len(csv_data)} data points")
 
-    # Print results table at the end
-    if high_fork_results:
-        print("\n" + "="*80)
-        print("HIGH Stale Rate RESULTS (≥ 0.33)")
-        print("="*80)
-        print(f"{'Difficulty (D)':<15} {'Log₂(D)':<8} {'Beta (β)':<10} {'Stale Rate':<12}")
-        print("-" * 80)
-        
-        # Sort by Stale Rate (highest first)
-        high_fork_results.sort(key=lambda x: x['fork_rate'], reverse=True)
-        
-        for result in high_fork_results:
-            print(f"{result['difficulty']:<15} {result['log2_difficulty']:<8} {result['beta']:<10.2f} {result['fork_rate']:<12.4f}")
-        
-        print("-" * 80)
-        print(f"Total combinations with high Stale Rate: {len(high_fork_results)}")
-        print("="*80)
-    else:
-        print("\n" + "="*50)
-        print("No combinations resulted in Stale Rate ≥ 0.33")
-        print("="*50)
-
-    # Create meshgrid for plotting
-    D_log = np.log2(difficulties)
-    D_mesh, beta_mesh = np.meshgrid(D_log, betas, indexing='ij')
-
-    fig = plt.figure(figsize=(12, 8))
-    ax = fig.add_subplot(111, projection='3d')
-
-    ax.plot_surface(D_mesh, beta_mesh, fork_rate_matrix, cmap='viridis')
-    ax.set_xlabel('$\\log_2(D)$')
-    ax.set_ylabel('$\\beta$')
-    ax.set_zlabel('Stale Rate')
+    thresholds = [(1 - x)/(2 - x) for x in fork_rates]
+    
+    fig1, ax1 = plt.subplots(figsize=(8, 6))
+    ax1.plot(difficulties, fork_rates, 'o-', label='Stale Rate')
+    ax1.set_xscale('log', base=2)
+    ax1.xaxis.set_major_formatter(FuncFormatter(format_func))
+    ax1.set_xlabel(r'$D$')
+    ax1.set_ylabel(r'$p_\text{stale}$')
+    ax1.grid(True)
+    ax1.legend()
     plt.tight_layout()
-    plt.savefig('images/fork_rate_vs_D_and_beta_c3.png')
+    plt.savefig('images/stale_rate_vs_difficulty_c1.png')
     plt.show()
 
+    fig2, ax2 = plt.subplots(figsize=(8, 6))
+    ax2.plot(difficulties, thresholds, 's--', color='red', label='Threshold')
+    ax2.set_xscale('log', base=2)
+    ax2.xaxis.set_major_formatter(FuncFormatter(format_func))
+    ax2.set_xlabel(r'$D$')
+    ax2.set_ylabel(r'51\% Attack Threshold')
+    ax2.grid(True)
+    ax2.legend()
+    plt.tight_layout()
+    plt.savefig('images/threshold_vs_difficulty_c2.png')
+    plt.show()
 
 def main():
     fname = 'output.txt'
@@ -511,50 +389,25 @@ def main():
     #D = 82047028459932.62
     D = 119116256505723.5 #difficulty as of May 9 2025
     #D = 3651011.631 #difficulty as of Feb 26 2013
-    beta = 1.0  # fraction of max_K that can be applied in block mining window
 
-    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000, difficulty = D, beta = beta)
+    '''
+    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000, difficulty = D)
     print('Simulating {} runs...'.format(10000000))
     avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
     print('Simulation complete!')
     print('Average Stale Rate:', avg_fork_rate)
     print('Average Blocks Found Per Day:', avg_blocks)
     print('Average Forks Found Per Day:', avg_forks)
+    '''
 
-    '''
-    simulate_across_betas(
-        K = 12,
-        num_plays = 2,
-        D = 119116256505723.5,
-        clustering_factor = 2.0,
-        gamma = 0.5,
-        out_fname = 'betas_output.txt',
-        num_simulations = 100000
-    )
-    '''
-    '''
     simulate_across_difficulties(
-        K = 12, 
-        num_plays= 2, 
-        beta = 1.0, 
+        K = 50, 
+        num_plays= 1,  
         clustering_factor = 2.0,
         gamma = 0.5,
         out_fname = 'difficulties_output.txt',
-        num_simulations = 100000
+        num_simulations = 10000
     )
-    '''
-
-    '''
-    simulate_across_difficulties_and_betas(
-        K = 6,
-        num_plays = 3,
-        clustering_factor = 2.0,
-        gamma = 0.5,
-        out_fname = 'combo_output.txt',
-        num_simulations = 20000,
-        csv_filename = 'quantum_mining_simulation_data_c3.csv'  # Optional: specify custom filename
-    )    
-    '''
     
 if __name__  == '__main__':
     main()

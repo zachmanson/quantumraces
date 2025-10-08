@@ -3,12 +3,11 @@ import math
 import sys
 import pygambit
 from util import cartesian
-from typing import Callable
 from functools import lru_cache
 import matplotlib.pyplot as plt
 
 class BuildPayoff:
-    def __init__(self, K: int, num_plays: int, D: float, clustering_factor: float = 1.0, gamma: float = 0.5, beta: float = 1.0, out_fname = 'output.txt', scale_with_D: bool = False, stop_after: int = 1):
+    def __init__(self, K: int, num_plays: int, D: float, clustering_factor: float = 1.0, gamma: float = 0.5, out_fname = 'output.txt', scale_with_D: bool = False, stop_after: int = 1):
         self.K = K
         self.num_plays = num_plays
         self.D = D
@@ -23,7 +22,6 @@ class BuildPayoff:
         print(f"Using max_K: {self.max_K}")
         self.clustering_factor = clustering_factor
         self.gamma = np.float64(gamma)
-        self.beta = beta
         self.grid = self.create_quadratic_grid()
         self.out_fname = out_fname
 
@@ -44,9 +42,44 @@ class BuildPayoff:
     def get_payoff(self, bob: bool = False) -> np.ndarray:
         set_K = np.arange(0, self.K + 1)
         arrs = (set_K for i in range(self.num_plays))
-        S = cartesian(arrs) #cartesian product of the indices of the strategies
+        S = cartesian(arrs)
+        
+        valid_indices = []
+        for idx, strat in enumerate(S):
+            total_iterations = sum(self.grid_to_iterations(s) for s in strat)
+            if total_iterations <= self.max_K:
+                valid_indices.append(idx)
+        
+        S_valid = S[valid_indices]
+        dim = len(S_valid)
+        
+        print(f"Filtered strategy set size: {dim} (out of {len(S)} total)")
 
-        dim = int(len(set_K) ** self.num_plays)
+        if not bob:
+            max_K_index = self.K
+            expected_strategies = []
+            for i in range(self.num_plays):
+                strat = [0] * self.num_plays
+                strat[i] = max_K_index
+                expected_strategies.append(tuple(strat))
+            
+            print(f"\nChecking for expected boundary strategies:")
+            all_found = True
+            for expected in expected_strategies:
+                found = any(tuple(s) == expected for s in S_valid)
+                iterations = [self.grid_to_iterations(idx) for idx in expected]
+                status = 'FOUND' if found else 'NOT FOUND'
+                print(f"  Strategy {expected} (iterations: {iterations}): {status}")
+                if not found:
+                    all_found = False
+            
+            if all_found:
+                print("All expected boundary strategies are present in filtered set")
+            else:
+                print("Some expected boundary strategies are MISSING from filtered set")
+
+
+
 
         A = np.zeros((dim, dim), dtype=np.float64)
 
@@ -57,11 +90,11 @@ class BuildPayoff:
         for row in range(dim):
             for col in range(dim):
                 if bob:
-                    alice_strat = S[col]
-                    bob_strat = S[row]
+                    alice_strat = S_valid[col]
+                    bob_strat = S_valid[row]
                 else:
-                    alice_strat = S[row]
-                    bob_strat = S[col]
+                    alice_strat = S_valid[row]
+                    bob_strat = S_valid[col]
 
                 total_payoff = np.float64(0.0)
                 for play in range(1, self.num_plays + 1):
@@ -80,10 +113,6 @@ class BuildPayoff:
             return np.float64(0.0)
         
         row_cum = self.get_cumulative_iterations(row_strat, play)
-
-        max_allowed_iterations = self.beta * self.max_K
-        if row_cum > max_allowed_iterations:
-            return np.float64(0.0)
         
         success_part = self.get_success_failure_part(row_strat, col_strat, play, row_cum)
         aggressive_part = self.get_aggressive_part(row_strat, col_strat, play, row_cum)
@@ -108,15 +137,12 @@ class BuildPayoff:
     def get_success_failure_part(self, row_strat: list[int], col_strat: list[int], play: int, row_cum: int) -> np.float64:
         col_first_strat = self.grid_to_iterations(col_strat[0])
 
-        # if row cumulative iterations are less than the first column strategy, return 1.0
         if row_cum < col_first_strat:
             return np.float64(1.0)
         
-        # find which interval row player's cumulative iterations fall into
         col_cumulative = [self.get_cumulative_iterations(col_strat, i + 1) for i in range(len(col_strat))]
 
-        num_col_strats = 0 #number of column strategies to include in product
-        #find the case and then multiply by (1 - col_strat[i]) up to the num_col_strats
+        num_col_strats = 0
 
         for i, col_cum in enumerate(col_cumulative):
             if row_cum < col_cum:
@@ -137,21 +163,18 @@ class BuildPayoff:
     def get_aggressive_part(self, row_strat: list[int], col_strat: list[int], play: int, row_cum: int) -> np.float64:
         current_row_iterations = self.grid_to_iterations(row_strat[play - 1])
         
-        # find Bob's most recent measurement before Alice's current cumulative iterations
         col_cumulative = [self.get_cumulative_iterations(col_strat, i + 1) for i in range(len(col_strat))]
         
-        # find the index ell of Bob's most recent measurement before row_cum
         ell = 0  
         bob_last_cum = 0  
         
         for j, col_cum in enumerate(col_cumulative):
             if col_cum < row_cum:
-                ell = j + 1  # j+1 because col_cumulative is 0-indexed but we want 1-indexed
+                ell = j + 1
                 bob_last_cum = col_cum
             else:
                 break
         
-        # calculate product 
         product_term = np.float64(1.0)
         
         for k in range(play - 1):  
@@ -160,7 +183,6 @@ class BuildPayoff:
                 alice_iterations_k = self.grid_to_iterations(row_strat[k])
                 product_term *= (1 - self.p(alice_iterations_k, self.D))
         
-        # calculate Bob's AQMS iterations: A_i - B_ell
         bob_aqms_iterations = row_cum - bob_last_cum
         
         aqms_term = (self.p(current_row_iterations, self.D) * 
@@ -172,24 +194,35 @@ class BuildPayoff:
     def print_results(self, result: list, player: str) -> None:
         set_K = np.arange(0, self.K + 1)
         cart_prod = cartesian((set_K for x in range(self.num_plays)))
+        
+        valid_indices = []
+        for idx, strat in enumerate(cart_prod):
+            total_iterations = sum(self.grid_to_iterations(s) for s in strat)
+            if total_iterations <= self.max_K:
+                valid_indices.append(idx)
+        
+        cart_prod_valid = cart_prod[valid_indices]
+        
         for i, value in enumerate(result):
             if abs(value) != 0.0:
-                strat = [self.grid_to_iterations(x) for x in cart_prod[i]]
+                strat = [self.grid_to_iterations(x) for x in cart_prod_valid[i]]
                 print('{} {} {}'.format(player, strat, value))
         return 
 
     def analyze_extreme_payoffs(self, A: np.ndarray, B: np.ndarray, player_name: str = "Alice") -> None:
-        """
-        Find and print the grid combinations that result in highest and lowest payoffs.
-        Handles ties by printing all combinations that achieve the extreme values.
-        """
         matrix = A if player_name == "Alice" else B
         
-        # Get the cartesian product of strategies
         set_K = np.arange(0, self.K + 1)
         cart_prod = cartesian((set_K for x in range(self.num_plays)))
         
-        # Find max and min values
+        valid_indices = []
+        for idx, strat in enumerate(cart_prod):
+            total_iterations = sum(self.grid_to_iterations(s) for s in strat)
+            if total_iterations <= self.max_K:
+                valid_indices.append(idx)
+        
+        cart_prod_valid = cart_prod[valid_indices]
+        
         max_val = np.max(matrix)
         min_val = np.min(matrix)
         
@@ -197,11 +230,9 @@ class BuildPayoff:
         print(f"Maximum payoff: {max_val}")
         print(f"Minimum payoff: {min_val}")
         
-        # Find all positions with max values
         max_positions = np.where(matrix == max_val)
         max_row_col_pairs = list(zip(max_positions[0], max_positions[1]))
         
-        # Find all positions with min values  
         min_positions = np.where(matrix == min_val)
         min_row_col_pairs = list(zip(min_positions[0], min_positions[1]))
         
@@ -209,8 +240,8 @@ class BuildPayoff:
         print(f"Found {len(max_row_col_pairs)} combination(s)")
         
         for i, (row_idx, col_idx) in enumerate(max_row_col_pairs):
-            row_strat_indices = cart_prod[row_idx]
-            col_strat_indices = cart_prod[col_idx]
+            row_strat_indices = cart_prod_valid[row_idx]
+            col_strat_indices = cart_prod_valid[col_idx]
             
             row_strat_iterations = [self.grid_to_iterations(x) for x in row_strat_indices]
             col_strat_iterations = [self.grid_to_iterations(x) for x in col_strat_indices]
@@ -222,8 +253,8 @@ class BuildPayoff:
         print(f"Found {len(min_row_col_pairs)} combination(s)")
         
         for i, (row_idx, col_idx) in enumerate(min_row_col_pairs):
-            row_strat_indices = cart_prod[row_idx]
-            col_strat_indices = cart_prod[col_idx]
+            row_strat_indices = cart_prod_valid[row_idx]
+            col_strat_indices = cart_prod_valid[col_idx]
             
             row_strat_iterations = [self.grid_to_iterations(x) for x in row_strat_indices]
             col_strat_iterations = [self.grid_to_iterations(x) for x in col_strat_indices]
@@ -246,8 +277,6 @@ class BuildPayoff:
         game.players[0].label = "Alice"
         game.players[1].label = "Bob"
         
-        # Find a Nash equilibrium using Gambit
-        # Using LCP solver which is equivalent to Lemke-Howson
         results = pygambit.nash.lcp_solve(game, rational=True, stop_after=self.stop_after)
 
         with open(self.out_fname, 'w') as f:
@@ -294,17 +323,41 @@ class BuildPayoff:
         plt.savefig("images/quadratic_grid_distribution.png")
         print("\nGrid distribution plot saved as 'quadratic_grid_distribution.png'")
 
+
+    def compute_expected_payoff(self, alice_mixed_strat: dict, bob_mixed_strat: dict, player: str = "Alice") -> np.float64:
+        expected_payoff = np.float64(0.0)
+        
+        original_gamma = self.gamma
+        
+        if player == "Bob":
+            self.gamma = 1 - self.gamma
+        
+        for alice_strat, alice_prob in alice_mixed_strat.items():
+            for bob_strat, bob_prob in bob_mixed_strat.items():
+                alice_strat_list = list(alice_strat)
+                bob_strat_list = list(bob_strat)
+                
+                if player == "Alice":
+                    payoff = self.get_payoff_element(alice_strat_list, bob_strat_list)
+                else:  # Bob
+                    payoff = self.get_payoff_element(bob_strat_list, alice_strat_list)
+                
+                expected_payoff += alice_prob * bob_prob * payoff
+        
+        self.gamma = original_gamma
+        
+        return expected_payoff
+
 def main():
-    K =  15 #number of pure strategies (including 0 so K=1 means 2 strategies)
-    num_plays = 3 #number of plays
+    K =  100 #number of pure strategies (including 0 so K=1 means 2 strategies)
+    num_plays = 1 #number of plays
     #D = 82047028459932.62
     D = 119116256505723.5 #difficulty as of May 9 2025
     #D = 3651011.631 #difficulty as of Feb 26 2013
     clustering_factor = 2.0
     gamma = 0.5
-    beta = 1.0  # fraction of max_K that can be applied in block mining window
 
-    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, beta, scale_with_D = True, stop_after = 1)
+    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, scale_with_D = False, stop_after = 1)
     builder.test_quadratic_grid()
     A = builder.get_payoff()
     B = builder.get_payoff(bob=True)
@@ -314,8 +367,6 @@ def main():
     print(B)
 
     print('Payoff matrices created!')
-    
-    #builder.analyze_extreme_payoffs(A, B, "Alice")
     
     builder.get_nash_eq_pygambit(A, B)
 

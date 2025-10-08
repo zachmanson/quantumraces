@@ -1,88 +1,109 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
-def generate_classical_timestamps(num_blocks, mean_time_sec, seed=42):
-    np.random.seed(seed)
-    inter_arrival = np.random.exponential(scale=mean_time_sec, size=num_blocks)
-    timestamps = np.cumsum(inter_arrival)
-    return timestamps
-
-def valid_next_timestamp(prev_timestamps, candidate, classical_timestamp):
-    """
-    Returns True if candidate timestamp satisfies Bitcoin rules:
-    1. Greater than median of previous 11 timestamps.
-    2. Not more than 2 hours ahead of the classical network timestamp.
-    """
-    window = prev_timestamps[-11:] if len(prev_timestamps) >= 11 else prev_timestamps
-    med = np.median(window)
-    max_allowed = classical_timestamp + 2 * 3600  # 2 hours in seconds
-    return candidate > med and candidate <= max_allowed
-
-def generate_quantum_timestamps(num_blocks, classical_timestamps, classical_mean_time_sec, compression_factor):
-    compressed_inter_block = classical_mean_time_sec / compression_factor
-    quantum_timestamps = [0]  # start at zero for simplicity
-
-    for i in range(1, num_blocks):
-        candidate = quantum_timestamps[-1] + compressed_inter_block
-
-        # Check Bitcoin rules
-        window = quantum_timestamps[-11:] if len(quantum_timestamps) >= 11 else quantum_timestamps
-        med = np.median(window)
-        max_allowed = classical_timestamps[i] + 2*3600
-
-        if candidate <= med:
-            # Cannot compress below the median-of-11 rule
-            raise ValueError(
-                f"Impossible compression at block {i}: candidate {candidate:.1f}s "
-                f"<= median of previous 11 ({med:.1f}s)."
-            )
-        if candidate > max_allowed:
-            # Cannot go beyond 2 hours of classical network time
-            raise ValueError(
-                f"Impossible compression at block {i}: candidate {candidate:.1f}s "
-                f"> 2 hours beyond classical timestamp ({max_allowed:.1f}s)."
-            )
-
-        quantum_timestamps.append(candidate)
-
-    return np.array(quantum_timestamps)
-
-def main():
-    num_blocks = 1000
-    mean_time_minutes = 10
-    mean_time_sec = mean_time_minutes * 60
-
-    # Generate classical timestamps
-    classical_timestamps = generate_classical_timestamps(num_blocks, mean_time_sec)
-
-    # Set compression factor (try large values like 64, 100, 1000)
-    compression_factor = 400000
-
+def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization_factor=1500):
+    alice_data, bob_data = {}, {}
     try:
-        quantum_timestamps = generate_quantum_timestamps(
-            num_blocks, classical_timestamps, mean_time_sec, compression_factor
-        )
-    except ValueError as e:
-        print(f"Compression factor {compression_factor} failed: {e}")
+        with open(filename, 'r') as f:
+            lines = f.read().strip().split('\n')
+    except FileNotFoundError:
+        print(f"Error: File '{filename}' not found.")
         return
 
-    # Print stats
-    classical_duration = classical_timestamps[-1] - classical_timestamps[0]
-    quantum_duration = quantum_timestamps[-1] - quantum_timestamps[0]
-    print(f"Classical chain duration (sec): {classical_duration:.1f} (~{classical_duration/3600:.2f} hours)")
-    print(f"Quantum chain duration (sec): {quantum_duration:.1f} (~{quantum_duration/3600:.2f} hours)")
-    print(f"Compression factor achieved: {classical_duration / quantum_duration:.2f}")
+    for line in lines:
+        if not line.strip():
+            continue
+        parts = line.split(' ', 1)
+        player = parts[0]
+        tuple_str_end_idx = parts[1].rfind(']')
+        tuple_str = parts[1][:tuple_str_end_idx + 1]
+        try:
+            current_tuple = eval(tuple_str.replace('np.int64(', '').replace(')', ''))
+        except Exception:
+            continue
+        try:
+            probability = float(parts[1][tuple_str_end_idx + 2:].strip())
+        except ValueError:
+            continue
+        if player == 'Alice':
+            alice_data[tuple(current_tuple)] = probability
+        elif player == 'Bob':
+            bob_data[tuple(current_tuple)] = probability
 
-    # Plot
-    plt.figure(figsize=(12,6))
-    plt.plot(classical_timestamps / 3600, label='Classical chain timestamps (hours)')
-    plt.plot(quantum_timestamps / 3600, label=f'Quantum compressed timestamps (factor {compression_factor})')
-    plt.xlabel('Block height')
-    plt.ylabel('Timestamp (hours)')
-    plt.title('Classical vs Quantum Block Timestamps with Bitcoin Rules')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    def create_discrete_heatmap(player_name, data, label, normalization_factor):
+        if not data:
+            return
+        sorted_tuples = sorted(data.items(), key=lambda x: x[1], reverse=True)
+        max_len = max(len(tup) for tup, _ in sorted_tuples)
+        cmap = mcolors.LinearSegmentedColormap.from_list("custom_cmap", ["white", "black"])
 
-if __name__ == "__main__":
-    main()
+        # Make figure wider for max_len == 1
+        if max_len == 1:
+            figsize = min(max(len(sorted_tuples) * 0.6, 8), 12), 3
+        else:
+            figsize = len(sorted_tuples) * 0.7, max_len * 1.2
+
+        fig, ax = plt.subplots(figsize=figsize)
+        x_ticks, x_labels = [], []
+        for i, (tup, prob) in enumerate(sorted_tuples):
+            x_ticks.append(i)
+            x_labels.append(f"{i+1}")
+            for j, val in enumerate(tup):
+                ax.add_patch(plt.Rectangle((i - 0.5, j - 0.5), 1, 1,
+                                           facecolor=cmap(val / normalization_factor),
+                                           edgecolor='black', linewidth=0.5))
+
+        ax.set_xlim(-0.5, len(sorted_tuples) - 0.5)
+        ax.set_ylim(max_len - 0.5, -0.5)
+        regime = 'low-difficulty regime' if normalization_factor == 1500 else 'ideal regime'
+        ax.set_title(f'{player_name} NE Mixed Strategy (c = {max_len}, {regime})')
+
+        # Lower x-axis label if max_len == 1
+        if max_len == 1:
+            ax.set_xlabel('Pure strategy index', fontsize=10, labelpad=30)
+        else:
+            ax.set_xlabel('Pure strategy index', fontsize=10)
+
+        ax.set_ylabel('Measurement Index')
+        ax.set_xticks(x_ticks)
+
+        # If max_len == 1, show probabilities slanted under x-axis
+        if max_len == 1:
+            ax.set_xticklabels(x_labels, fontsize=9)
+            for i, (_, prob) in enumerate(sorted_tuples):
+                prob_label = "<0.01" if prob < 0.01 else f"{prob:.2f}"
+                ax.text(i, -0.9, prob_label, fontsize=9, rotation=45,
+                        ha='right', va='top', transform=ax.get_xaxis_transform())
+        else:
+            # Original style: index and probability in label
+            x_labels_full = []
+            for i, (_, prob) in enumerate(sorted_tuples):
+                prob_label = "<0.01" if prob < 0.01 else f"{prob:.2f}"
+                x_labels_full.append(f"{i+1}\n({prob_label})")
+            ax.set_xticklabels(x_labels_full, fontsize=9)
+
+        ax.set_yticks(np.arange(max_len))
+        ax.set_yticklabels([f'{i+1}' for i in range(max_len)], fontsize=10)
+        norm = mcolors.Normalize(vmin=0, vmax=1)
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = fig.colorbar(sm, ax=ax, fraction=0.015, pad=0.04, shrink = 0.5)
+        cbar.set_ticks([0, 1])
+        cbar.set_ticklabels(['0', r'$\kappa$'])
+        ax.set_aspect('equal', adjustable='box')
+
+        # Lower the (a)/(b) label for max_len == 1
+        label_y = -0.35 if max_len == 3 else -0.55 if max_len == 2 else -0.30 if max_len == 4 else -3
+        ax.text(0.5, label_y, label, fontsize=10, ha='center', va='top', transform=ax.transAxes)
+
+        plt.tight_layout()
+        plt.savefig(f'images/{player_name.lower()}_nash_heatmap_c{max_len}_ideal.pdf', dpi=300, bbox_inches='tight')
+        plt.show()
+
+    normalization_factor = 8571866
+    #normalization_factor = 1500
+    create_discrete_heatmap('Alice', alice_data, '(a)', normalization_factor = normalization_factor)
+    create_discrete_heatmap('Bob', bob_data, '(b)', normalization_factor = normalization_factor)
+
+visualize_nash_equilibria_discrete_file()
