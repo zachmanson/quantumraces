@@ -315,79 +315,97 @@ class QuantumMiningSimulator:
 def format_func(x, pos):
     return f'$2^{{{int(np.log2(x))}}}$'
 
-def simulate_across_difficulties(K: int, num_plays: int, clustering_factor: int, gamma: float, out_fname: str, num_simulations: int, csv_filename: str = None):
-    difficulties = [2**30, 2**31, 2**32, 2**33, 2**34, 2**35, 2**36, 2**37, 2**38, 2**39, 2**40, 2**41, 2**42]
-    fork_rates = []
-    csv_data = []
+def simulate_multiple_strategies():
+    strategies = [
+        {'num_plays': 1, 'K': 50, 'label': r'$c=1$', 'color': 'blue', 'marker': 'o'},
+        {'num_plays': 2, 'K': 25, 'label': r'$c=2$', 'color': 'red', 'marker': 's'},
+        {'num_plays': 3, 'K': 15, 'label': r'$c=3$', 'color': 'green', 'marker': '^'},
+        {'num_plays': 4, 'K': 15, 'label': r'$c=4$', 'color': 'purple', 'marker': 'd'}
+    ]
     
-    for difficulty in difficulties:
-        print(difficulty)
-        payoff_builder = BuildPayoff(K, num_plays, difficulty, clustering_factor, gamma, out_fname, scale_with_D = False)
-        A = payoff_builder.get_payoff()
-        B = payoff_builder.get_payoff(bob = True)
-
-        payoff_builder.get_nash_eq_pygambit(A, B)
-
-        print('Nash equilibrium found!')
-        analyzer = NashEquilibriaAnalyzer()
-        nash_eq = analyzer.converge(out_fname)
-
-        print('Beginning simulation...')
-        simulator = QuantumMiningSimulator(nash_eq, num_simulations, difficulty=difficulty)
-        avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
-        print('Simulation complete!')
-        print('Average Stale Rate:', avg_fork_rate)
-        fork_rates.append(avg_fork_rate)
+    difficulties = [2**30, 2**31, 2**32, 2**33, 2**34, 2**35, 2**36, 2**37, 2**38, 2**39, 2**40, 2**41, 2**42, 2**43, 2**44, 2**45]
+    
+    clustering_factor = 2.0
+    gamma = 0.5
+    num_simulations = 10000
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    for strategy in strategies:
+        num_plays = strategy['num_plays']
+        K = strategy['K']
+        print(f"\n{'='*60}")
+        print(f"Processing strategy: c={num_plays}, K={K}")
+        print(f"{'='*60}")
         
-        csv_data.append({
-            'difficulty': difficulty,
-            'log2_difficulty': int(np.log2(difficulty)),
-            'stale_rate': avg_fork_rate,
-            'threshold': (1 - avg_fork_rate) / (2 - avg_fork_rate),
-            'avg_blocks': avg_blocks,
-            'avg_forks': avg_forks
-        })
-
-    if csv_filename is None:
+        fork_rates = []
+        csv_data = []
+        
+        for difficulty in difficulties:
+            print(f"Difficulty: 2^{int(np.log2(difficulty))}")
+            
+            out_fname = 'temp_nash_output.txt'
+            payoff_builder = BuildPayoff(K, num_plays, difficulty, clustering_factor, gamma, out_fname, scale_with_D=False)
+            A = payoff_builder.get_payoff()
+            B = payoff_builder.get_payoff(bob=True)
+            
+            payoff_builder.get_nash_eq_pygambit(A, B)
+            print('Nash equilibrium found!')
+            
+            analyzer = NashEquilibriaAnalyzer()
+            nash_eq = analyzer.converge(out_fname)
+            
+            print('Beginning simulation...')
+            simulator = QuantumMiningSimulator(nash_eq, num_simulations, difficulty=difficulty)
+            avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
+            print(f'Average Stale Rate: {avg_fork_rate}')
+            
+            fork_rates.append(avg_fork_rate)
+            
+            csv_data.append({
+                'difficulty': difficulty,
+                'log2_difficulty': int(np.log2(difficulty)),
+                'stale_rate': avg_fork_rate,
+                'threshold': (1 - avg_fork_rate) / (2 - avg_fork_rate),
+                'avg_blocks': avg_blocks,
+                'avg_forks': avg_forks
+            })
+        
         csv_filename = f'simulation_difficulties_c{num_plays}.csv'
+        df = pd.DataFrame(csv_data)
+        df.to_csv(csv_filename, index=False)
+        print(f"\nData saved to: {csv_filename}")
+        
+        ax.plot(difficulties, fork_rates, 
+                marker=strategy['marker'], 
+                linestyle='-',
+                color=strategy['color'],
+                label=strategy['label'],
+                linewidth=2,
+                markersize=8)
     
-    df = pd.DataFrame(csv_data)
-    df.to_csv(csv_filename, index=False)
-    print(f"\nSimulation data saved to: {csv_filename}")
-
-    thresholds = [(1 - x)/(2 - x) for x in fork_rates]
+    ax.set_xscale('log', base=2)
+    ax.xaxis.set_major_formatter(FuncFormatter(format_func))
+    ax.set_xlabel(r'$D$', fontsize=12)
+    ax.set_ylabel(r'$p_\text{stale}$', fontsize=12)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=10, loc='best')
     
-    fig1, ax1 = plt.subplots(figsize=(8, 6))
-    ax1.plot(difficulties, fork_rates, 'o-', label='Stale Rate')
-    ax1.set_xscale('log', base=2)
-    ax1.xaxis.set_major_formatter(FuncFormatter(format_func))
-    ax1.set_xlabel(r'$D$')
-    ax1.set_ylabel(r'$p_\text{stale}$')
-    ax1.grid(True)
-    ax1.legend()
     plt.tight_layout()
-    plt.savefig('images/stale_rate_vs_difficulty_c1.png')
+    plt.savefig('images/stale_rate_vs_difficulty_all_strategies.pdf', dpi=300)
     plt.show()
-
-    fig2, ax2 = plt.subplots(figsize=(8, 6))
-    ax2.plot(difficulties, thresholds, 's--', color='red', label='Threshold')
-    ax2.set_xscale('log', base=2)
-    ax2.xaxis.set_major_formatter(FuncFormatter(format_func))
-    ax2.set_xlabel(r'$D$')
-    ax2.set_ylabel(r'51\% Attack Threshold')
-    ax2.grid(True)
-    ax2.legend()
-    plt.tight_layout()
-    plt.savefig('images/threshold_vs_difficulty_c2.png')
-    plt.show()
+    
+    print(f"\n{'='*60}")
+    print("All simulations complete!")
+    print(f"{'='*60}")
 
 def main():
-    fname = 'output.txt'
-    analyzer = NashEquilibriaAnalyzer()
-    nash_eq = analyzer.converge(fname)
+    #fname = 'output.txt'
+    #analyzer = NashEquilibriaAnalyzer()
+    #nash_eq = analyzer.converge(fname)
 
     #D = 82047028459932.62
-    D = 119116256505723.5 #difficulty as of May 9 2025
+    #D = 119116256505723.5 #difficulty as of May 9 2025
     #D = 3651011.631 #difficulty as of Feb 26 2013
 
     '''
@@ -400,14 +418,7 @@ def main():
     print('Average Forks Found Per Day:', avg_forks)
     '''
 
-    simulate_across_difficulties(
-        K = 50, 
-        num_plays= 1,  
-        clustering_factor = 2.0,
-        gamma = 0.5,
-        out_fname = 'difficulties_output.txt',
-        num_simulations = 10000
-    )
+    simulate_multiple_strategies()
     
 if __name__  == '__main__':
     main()
