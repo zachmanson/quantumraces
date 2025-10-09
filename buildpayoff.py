@@ -349,15 +349,15 @@ class BuildPayoff:
         return expected_payoff
 
 def main():
-    K =  100 #number of pure strategies (including 0 so K=1 means 2 strategies)
-    num_plays = 1 #number of plays
+    K =  20 #number of pure strategies (including 0 so K=1 means 2 strategies)
+    num_plays = 2 #number of plays
     #D = 82047028459932.62
     D = 119116256505723.5 #difficulty as of May 9 2025
     #D = 3651011.631 #difficulty as of Feb 26 2013
     clustering_factor = 2.0
     gamma = 0.5
 
-    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, scale_with_D = False, stop_after = 1)
+    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, scale_with_D = False, stop_after = 2)
     builder.test_quadratic_grid()
     A = builder.get_payoff()
     B = builder.get_payoff(bob=True)

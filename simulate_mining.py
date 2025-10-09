@@ -16,13 +16,19 @@ class QuantumMiningSimulator:
                  quantum_simulation_time: float = 86400.0, #seconds in a day
                  difficulty: float = 119116256505723.5, #current difficulty
                  #difficulty: float = 3651011.631, #difficulty from 2013 (low D)
+                 scale_with_D: bool = False
     ) -> None:
         self.nash_equilibrium = nash_equilibrium
         self.num_simulations = num_simulations
         self.classical_block_rate = classical_block_rate
         self.quantum_simulation_time = quantum_simulation_time
         self.difficulty = difficulty
-        self.optimal_iterations = min(np.floor(np.pi / 4 * np.sqrt(difficulty)),  int(np.floor(np.pi/4 * np.sqrt(2**32))))
+        self.scale_with_D = scale_with_D
+        if not scale_with_D:
+            self.optimal_iterations = min(np.floor(np.pi / 4 * np.sqrt(difficulty)),  int(np.floor(np.pi/4 * np.sqrt(2**32))))
+        else:
+            self.optimal_iterations = np.floor(np.pi / 4 * np.sqrt(difficulty))
+
         self.seconds_per_iteration = 600 / (self.optimal_iterations)
 
     def measurement_probability(self, iterations: int) -> float:
@@ -400,25 +406,23 @@ def simulate_multiple_strategies():
     print(f"{'='*60}")
 
 def main():
-    #fname = 'output.txt'
-    #analyzer = NashEquilibriaAnalyzer()
-    #nash_eq = analyzer.converge(fname)
+    fname = 'output.txt'
+    analyzer = NashEquilibriaAnalyzer()
+    nash_eq = analyzer.converge(fname)
 
-    #D = 82047028459932.62
-    #D = 119116256505723.5 #difficulty as of May 9 2025
+    D = 119116256505723.5 #difficulty as of May 9 2025
     #D = 3651011.631 #difficulty as of Feb 26 2013
 
-    '''
-    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000, difficulty = D)
+    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000, difficulty = D, scale_with_D = True)
     print('Simulating {} runs...'.format(10000000))
     avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
     print('Simulation complete!')
     print('Average Stale Rate:', avg_fork_rate)
     print('Average Blocks Found Per Day:', avg_blocks)
     print('Average Forks Found Per Day:', avg_forks)
-    '''
-
-    simulate_multiple_strategies()
+    
+    
+    #simulate_multiple_strategies()
     
 if __name__  == '__main__':
     main()

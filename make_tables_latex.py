@@ -60,9 +60,9 @@ def process_file(input_file: str, output_file: str, normalize: bool = False, max
         blocks.append(current_block)
 
     with open(output_file, 'w') as f:
-        f.write(r'\begin{tabular}{|l|l|l|}' + '\n')
+        f.write(r'\begin{tabular}{|c|c|c|}' + '\n')
         f.write(r'\hline' + '\n')
-        f.write('Player & Strategy & Probability \\\\ \n')
+        f.write('Player & Pure Strategy & Probability \\\\ \n')
         f.write(r'\hline' + '\n')
 
         for i, block in enumerate(blocks):
@@ -329,8 +329,10 @@ def export_filtered_data(df: pd.DataFrame, filters: Dict[str, Any],
         csv_to_markdown_table(filtered_df, output_file)
     
     print(f"Exported {len(filtered_df)} rows to {output_file}")
+ 
 
 if __name__ == "__main__": 
-    #process_file('output.txt', 'output_latex.tex', normalize=True)
-    process_file('output.txt', 'output_latex.tex', normalize=True, max_iterations = 8571866)
+    #max_iterations = 1500
+    max_iterations = 8571866
+    process_file('output.txt', 'output_latex.tex', normalize=False, max_iterations = max_iterations)
     check_probability_sums('output.txt')
