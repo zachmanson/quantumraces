@@ -333,7 +333,7 @@ def simulate_multiple_strategies():
     
     clustering_factor = 2.0
     gamma = 0.5
-    num_simulations = 10000
+    num_simulations = 1000000
     
     fig, ax = plt.subplots(figsize=(10, 6))
     
@@ -410,11 +410,12 @@ def main():
     analyzer = NashEquilibriaAnalyzer()
     nash_eq = analyzer.converge(fname)
 
-    D = 119116256505723.5 #difficulty as of May 9 2025
-    #D = 3651011.631 #difficulty as of Feb 26 2013
+    #D = 119116256505723.5 #difficulty as of May 9 2025
+    D = 3651011.631 #difficulty as of Feb 26 2013
 
-    simulator = QuantumMiningSimulator(nash_eq, num_simulations = 100000, difficulty = D, scale_with_D = True)
-    print('Simulating {} runs...'.format(10000000))
+    num_simulations = 1000000
+    simulator = QuantumMiningSimulator(nash_eq, num_simulations = num_simulations, difficulty = D, scale_with_D = False)
+    print('Simulating {} runs...'.format(num_simulations))
     avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
     print('Simulation complete!')
     print('Average Stale Rate:', avg_fork_rate)

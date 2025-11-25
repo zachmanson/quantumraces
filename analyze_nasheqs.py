@@ -41,9 +41,6 @@ class NashEquilibriaAnalyzer:
             nash_eq.append(current_eq)
 
         return nash_eq
-    
-    
-    # Removed calculate_expected_payoffs method since we're just randomly selecting
 
     def choose_eq(self, nash_eqs: list[dict[str, list[tuple[list[float], float]]]]) -> dict[str, list[tuple[list[float], float]]]:
         return random.choice(nash_eqs)
@@ -56,9 +53,8 @@ class NashEquilibriaAnalyzer:
     
 
 if __name__ == "__main__":
-    # Simple test
     analyzer = NashEquilibriaAnalyzer()
-    nash_eq = analyzer.converge('nash_eqs.txt')
+    nash_eq = analyzer.converge('output.txt')
     for player, strategies in nash_eq.items():
         print(f"{player}:")
         for strategy, value in strategies:

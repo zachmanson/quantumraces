@@ -38,7 +38,6 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         max_len = max(len(tup) for tup, _ in sorted_tuples)
         cmap = mcolors.LinearSegmentedColormap.from_list("custom_cmap", ["white", "black"])
 
-        # Make figure wider for max_len == 1
         if max_len == 1:
             figsize = min(max(len(sorted_tuples) * 0.6, 8), 12), 3
         else:
@@ -50,16 +49,12 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
             x_ticks.append(i)
             x_labels.append(f"{i+1}")
             for j, val in enumerate(tup):
-                ax.add_patch(plt.Rectangle((i - 0.5, j - 0.5), 1, 1,
-                                           facecolor=cmap(val / normalization_factor),
-                                           edgecolor='black', linewidth=0.5))
-
+                ax.add_patch(plt.Rectangle((i - 0.5, j - 0.5), 1, 1, facecolor=cmap(val / normalization_factor), edgecolor='black', linewidth=0.5))
         ax.set_xlim(-0.5, len(sorted_tuples) - 0.5)
         ax.set_ylim(max_len - 0.5, -0.5)
         regime = 'low-difficulty regime' if normalization_factor == 1500 else 'ideal regime'
         ax.set_title(f'{player_name} NE Mixed Strategy (c = {max_len}, {regime})')
 
-        # Lower x-axis label if max_len == 1
         if max_len == 1:
             ax.set_xlabel('Pure strategy index', fontsize=10, labelpad=30)
         else:
@@ -68,7 +63,6 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         ax.set_ylabel('Measurement Index')
         ax.set_xticks(x_ticks)
 
-        # If max_len == 1, show probabilities slanted under x-axis
         if max_len == 1:
             ax.set_xticklabels(x_labels, fontsize=9)
             for i, (_, prob) in enumerate(sorted_tuples):
@@ -76,7 +70,6 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
                 ax.text(i, -0.9, prob_label, fontsize=9, rotation=45,
                         ha='right', va='top', transform=ax.get_xaxis_transform())
         else:
-            # Original style: index and probability in label
             x_labels_full = []
             for i, (_, prob) in enumerate(sorted_tuples):
                 prob_label = "<0.01" if prob < 0.01 else f"{prob:.2f}"
@@ -93,7 +86,6 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         cbar.set_ticklabels(['0', r'$\kappa$'])
         ax.set_aspect('equal', adjustable='box')
 
-        # Lower the (a)/(b) label for max_len == 1
         label_y = -0.35 if max_len == 3 else -0.55 if max_len == 2 else -0.30 if max_len == 4 else -3
         ax.text(0.5, label_y, label, fontsize=10, ha='center', va='top', transform=ax.transAxes)
 

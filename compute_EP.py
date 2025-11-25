@@ -2,7 +2,7 @@ import numpy as np
 from buildpayoff import BuildPayoff
 import math
 
-def parse_nash_eq_from_file(filename: str) -> (dict, dict):
+def parse_nash_eq_from_file(filename: str) -> (dict, dict): 
     alice_strats: dict = {}
     bob_strats: dict = {}
     with open(filename, 'r') as f:
@@ -63,8 +63,8 @@ def main() -> None:
     )
     alice_expected = builder.compute_expected_payoff(alice_mixed, bob_mixed, player="Alice")
     bob_expected = builder.compute_expected_payoff(alice_mixed, bob_mixed, player="Bob")
-    print(f"\nExpected payoff for Alice: {alice_expected}")
-    print(f"Expected payoff for Bob: {bob_expected}\n")
+    print(f"\nExpected payoff for Alice: {repr(alice_expected)}")
+    print(f"Expected payoff for Bob: {repr(bob_expected)}")
 
 if __name__ == "__main__":
     main()

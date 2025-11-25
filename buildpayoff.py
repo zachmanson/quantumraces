@@ -63,7 +63,7 @@ class BuildPayoff:
                 strat[i] = max_K_index
                 expected_strategies.append(tuple(strat))
             
-            print(f"\nChecking for expected boundary strategies:")
+            print(f"\nChecking boundary pure strategies:")
             all_found = True
             for expected in expected_strategies:
                 found = any(tuple(s) == expected for s in S_valid)
@@ -74,12 +74,9 @@ class BuildPayoff:
                     all_found = False
             
             if all_found:
-                print("All expected boundary strategies are present in filtered set")
+                print("All expected boundary pure strategies found in filtered set")
             else:
-                print("Some expected boundary strategies are MISSING from filtered set")
-
-
-
+                print("Some expected boundary pure strategies NOT found in filtered set")
 
         A = np.zeros((dim, dim), dtype=np.float64)
 
@@ -310,9 +307,9 @@ class BuildPayoff:
         print(differences)
         
         if all(differences[i] <= differences[i+1] for i in range(len(differences)-1)):
-            print("\nVerification FAILED: Grid spacing is not decreasing toward max_K")
+            print("\nGrid spacing is NOT decreasing toward uppeer bound!")
         else:
-            print("\nVerification PASSED: Grid spacing is generally decreasing toward max_K")
+            print("\nGrid spacing is generally decreasing toward upper bound!")
         
         plt.figure(figsize=(10, 6))
         plt.plot(range(len(self.grid)), self.grid, 'o-')
@@ -349,15 +346,15 @@ class BuildPayoff:
         return expected_payoff
 
 def main():
-    K =  20 #number of pure strategies (including 0 so K=1 means 2 strategies)
-    num_plays = 2 #number of plays
+    K = 25 #number of pure strategies (including 0 so K=1 means 2 strategies)
+    num_plays = 4 #number of plays
     #D = 82047028459932.62
     D = 119116256505723.5 #difficulty as of May 9 2025
     #D = 3651011.631 #difficulty as of Feb 26 2013
     clustering_factor = 2.0
     gamma = 0.5
 
-    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, scale_with_D = False, stop_after = 2)
+    builder = BuildPayoff(K, num_plays, D, clustering_factor, gamma, scale_with_D = True, stop_after = 1)
     builder.test_quadratic_grid()
     A = builder.get_payoff()
     B = builder.get_payoff(bob=True)
@@ -366,9 +363,14 @@ def main():
     print("Payoff matrix for Bob:")
     print(B)
 
+    #analyze extreme payoffs
+    #builder.analyze_extreme_payoffs(A, B, player_name="Alice")
+    #builder.analyze_extreme_payoffs(B, A, player_name="Bob")
+
     print('Payoff matrices created!')
     
     builder.get_nash_eq_pygambit(A, B)
+    
 
 
 if __name__ == "__main__":

@@ -1,5 +1,0 @@
-Alice [np.float64(0.64), np.float64(0.0), np.float64(0.36)] 0.8322965525191574
-Alice [np.float64(0.84), np.float64(0.0), np.float64(0.0)] 0.16770344748084265
-Bob [np.float64(0.0), np.float64(0.51), np.float64(0.36)] 0.6004059488282416
-Bob [np.float64(0.0), np.float64(0.75), np.float64(0.19)] 0.3995940511717584
--------------
