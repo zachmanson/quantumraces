@@ -97,7 +97,6 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         plt.savefig(f'images/{player_name.lower()}_nash_heatmap_c{max_len}_{difficulty_label}.pdf', dpi=300, bbox_inches='tight')
         plt.show()
 
-    #normalization_factor = 8571866
     create_discrete_heatmap('Alice', alice_data, '(a)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
     create_discrete_heatmap('Bob', bob_data, '(b)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
 

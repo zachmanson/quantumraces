@@ -17,6 +17,7 @@ def test_difficulty_label_ideal(tmp_path):
          patch("matplotlib.pyplot.tight_layout"):
         visualize_nash_equilibria_discrete_file(str(nash_file), difficulty_label="ideal")
     assert any("ideal" in p for p in saved_paths)
+    assert len(saved_paths) == 2
 
 def test_difficulty_label_low(tmp_path):
     nash_file = tmp_path / "nash_eq.txt"
@@ -28,3 +29,4 @@ def test_difficulty_label_low(tmp_path):
          patch("matplotlib.pyplot.tight_layout"):
         visualize_nash_equilibria_discrete_file(str(nash_file), difficulty_label="low")
     assert any("low" in p for p in saved_paths)
+    assert len(saved_paths) == 2
