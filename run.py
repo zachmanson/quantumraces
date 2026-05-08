@@ -19,7 +19,6 @@ Examples:
 import argparse
 import os
 import sys
-import tempfile
 
 import numpy as np
 
@@ -84,17 +83,20 @@ def resolve_D(d_arg: str) -> float:
         sys.exit(1)
 
 
+def _difficulty_label(D: float, scale_with_D: bool) -> str:
+    if D == D_LOW:
+        return "low"
+    elif scale_with_D:
+        return "ideal"
+    return "high"
+
+
 def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
                  plot_heatmap=False, compute_ep=False, gamma=0.5, no_simulate=False):
     """Load a Nash eq file and run the Monte Carlo simulation."""
 
     # Determine difficulty label
-    if D == D_LOW:
-        difficulty_label = "low"
-    elif scale_with_D:
-        difficulty_label = "ideal"
-    else:
-        difficulty_label = "high"
+    difficulty_label = _difficulty_label(D, scale_with_D)
 
     # Compute expected payoffs if requested
     if compute_ep:
