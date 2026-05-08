@@ -66,6 +66,8 @@ def parse_args():
                         help='Sweep budget multipliers and plot stale rate vs budget')
     parser.add_argument('--no-simulate', action='store_true',
                         help='Skip Monte Carlo simulation, only compute Nash equilibrium')
+    parser.add_argument('--compute-ep', action='store_true',
+                        help='Compute and print expected payoffs (use with --simulate-from)')
     parser.add_argument('--simulate-from', metavar='FILE',
                         help='Skip pipeline, load Nash eq from FILE and run simulation only')
     return parser.parse_args()
@@ -225,7 +227,16 @@ def main():
             print(f"Error: file not found: {args.simulate_from}")
             sys.exit(1)
         print(f"Loading Nash equilibrium from: {args.simulate_from}")
-        run_simulate(args.simulate_from, args.num_simulations, D, args.scale_with_D)
+        run_simulate(
+            args.simulate_from,
+            args.num_simulations,
+            D,
+            scale_with_D=args.scale_with_D,
+            plot_heatmap=args.plot_heatmap,
+            compute_ep=args.compute_ep,
+            gamma=args.gamma,
+            no_simulate=args.no_simulate,
+        )
     else:
         run_pipeline(
             D=D,
