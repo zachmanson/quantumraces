@@ -14,6 +14,8 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
     for line in lines:
         if not line.strip():
             continue
+        if line.startswith('---'):
+            continue
         parts = line.split(' ', 1)
         if len(parts) < 2:
             print(f"Skipping malformed line: {repr(line)}")

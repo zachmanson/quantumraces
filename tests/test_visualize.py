@@ -4,7 +4,6 @@ matplotlib.use('Agg')  # non-interactive backend, must come before pyplot import
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from unittest.mock import patch, MagicMock
-import pytest
 from visualize_nash_eq import visualize_nash_equilibria_discrete_file
 
 def test_difficulty_label_ideal(tmp_path):

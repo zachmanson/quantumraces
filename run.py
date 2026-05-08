@@ -107,13 +107,13 @@ def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
         print(f"{'='*60}")
         alice_mixed, bob_mixed = parse_nash_eq_from_file(nash_fname)
         all_iters = [v for strat in list(alice_mixed.keys()) + list(bob_mixed.keys()) for v in strat]
-        if all_iters:
+        if all_iters and alice_mixed and bob_mixed:
             num_plays = len(next(iter(alice_mixed.keys())))
             max_iters = max(all_iters)
             ep_builder = BuildPayoff(
                 n_q=max_iters, num_plays=num_plays, D=D,
                 clustering_factor=1.0, gamma=gamma,
-                scale_with_D=False
+                scale_with_D=scale_with_D
             )
             alice_ep = ep_builder.compute_expected_payoff(alice_mixed, bob_mixed, player="Alice")
             bob_ep   = ep_builder.compute_expected_payoff(alice_mixed, bob_mixed, player="Bob")
@@ -124,7 +124,7 @@ def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
 
     # Plot heatmap if requested
     if plot_heatmap:
-        norm_factor = int(np.floor(np.pi / 4 * np.sqrt(min(D, 2**32))))
+        norm_factor = int(np.floor(np.pi / 4 * np.sqrt(D if scale_with_D else min(D, 2**32))))
         from visualize_nash_eq import visualize_nash_equilibria_discrete_file
         visualize_nash_equilibria_discrete_file(
             nash_fname,
