@@ -42,7 +42,7 @@ def parse_args():
     )
     parser.add_argument(
         '--D', default='high',
-        help="Difficulty: 'high' (current, ~1.19e14), 'low' (2013, ~3.65e6), or a numeric value. Default: high"
+        help="Difficulty: 'high' (current, ~1.19e14), 'low' (2013, ~3.65e6), 'ideal' (high + scale-with-D), or a numeric value. Default: high"
     )
     parser.add_argument('--num-plays', '-c', type=int, default=3,
                         help='Number of Grover search plays (default: 3)')
@@ -52,8 +52,8 @@ def parse_args():
                         help='Payoff split parameter (default: 0.5)')
     parser.add_argument('--clustering-factor', type=float, default=2.0,
                         help='Grid clustering factor (default: 2.0)')
-    parser.add_argument('--num-simulations', type=int, default=1000000,
-                        help='Number of Monte Carlo simulations (default: 1000000)')
+    parser.add_argument('--num-simulations', type=int, default=None,
+                        help='Number of Monte Carlo simulations (default: 10000 for --plot-stale-difficulty, 1000000 otherwise)')
     parser.add_argument('--stop-after', type=int, default=1,
                         help='Stop after N Nash equilibria (default: 1)')
     parser.add_argument('--scale-with-D', action='store_true',
@@ -78,10 +78,12 @@ def resolve_D(d_arg: str) -> float:
         return D_HIGH
     if d_arg == 'low':
         return D_LOW
+    if d_arg == 'ideal':
+        return D_HIGH
     try:
         return float(d_arg)
     except ValueError:
-        print(f"Error: --D must be 'high', 'low', or a numeric value. Got: {d_arg!r}")
+        print(f"Error: --D must be 'high', 'low', 'ideal', or a numeric value. Got: {d_arg!r}")
         sys.exit(1)
 
 
@@ -136,6 +138,10 @@ def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
     if no_simulate:
         return None, None, None
 
+    print(f"\n{'='*60}")
+    print("Running Monte Carlo simulation")
+    print(f"{'='*60}")
+    print(f"  Simulations:         {num_simulations:,}")
     analyzer = NashEquilibriaAnalyzer()
     nash_eq = analyzer.converge(nash_fname)
     simulator = QuantumMiningSimulator(
@@ -145,9 +151,9 @@ def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
     print(f"\n{'='*60}")
     print("Results")
     print(f"{'='*60}")
-    print(f"  Stale rate:          {avg_fork_rate:.6f}")
-    print(f"  Avg blocks/day:      {avg_blocks:.2f}")
-    print(f"  Avg forks/day:       {avg_forks:.2f}")
+    print(f"  Stale rate:          {avg_fork_rate:.7f}")
+    print(f"  Avg blocks/day:      {avg_blocks:.5f}")
+    print(f"  Avg forks/day:       {avg_forks:.5f}")
     return avg_fork_rate, avg_blocks, avg_forks
 
 
@@ -221,8 +227,35 @@ def run_pipeline(D, num_plays, n_q, gamma, clustering_factor, num_simulations, s
 def main():
     args = parse_args()
     D = resolve_D(args.D)
+    scale_with_D = args.scale_with_D or (args.D == 'ideal')
+    if args.num_simulations is None:
+        args.num_simulations = 10000 if args.plot_stale_difficulty else 1000000
 
-    if args.simulate_from:
+    if args.plot_stale_difficulty:
+        print(f"\n{'='*60}")
+        print("Stale rate vs difficulty sweep (c=1..4)")
+        print(f"{'='*60}")
+        from simulate_mining import simulate_multiple_strategies
+        simulate_multiple_strategies(
+            num_simulations=args.num_simulations,
+            results_dir=RESULTS_DIR,
+            images_dir=IMAGES_DIR,
+        )
+    elif args.plot_stale_budget:
+        print(f"\n{'='*60}")
+        print(f"Stale rate vs budget sweep (c={args.num_plays}, n_q={args.n_q})")
+        print(f"{'='*60}")
+        from simulate_budgets import run_budget_sweep
+        run_budget_sweep(
+            n_q=args.n_q,
+            num_plays=args.num_plays,
+            clustering_factor=args.clustering_factor,
+            gamma=args.gamma,
+            num_simulations=args.num_simulations,
+            results_dir=RESULTS_DIR,
+            images_dir=IMAGES_DIR,
+        )
+    elif args.simulate_from:
         if not os.path.exists(args.simulate_from):
             print(f"Error: file not found: {args.simulate_from}")
             sys.exit(1)
@@ -231,7 +264,7 @@ def main():
             args.simulate_from,
             args.num_simulations,
             D,
-            scale_with_D=args.scale_with_D,
+            scale_with_D=scale_with_D,
             plot_heatmap=args.plot_heatmap,
             compute_ep=args.compute_ep,
             gamma=args.gamma,
@@ -246,35 +279,9 @@ def main():
             clustering_factor=args.clustering_factor,
             num_simulations=args.num_simulations,
             stop_after=args.stop_after,
-            scale_with_D=args.scale_with_D,
+            scale_with_D=scale_with_D,
             plot_heatmap=args.plot_heatmap,
             no_simulate=args.no_simulate,
-        )
-
-    if args.plot_stale_difficulty:
-        print(f"\n{'='*60}")
-        print("Stale rate vs difficulty sweep (c=1..4)")
-        print(f"{'='*60}")
-        from simulate_mining import simulate_multiple_strategies
-        simulate_multiple_strategies(
-            num_simulations=args.num_simulations,
-            results_dir=RESULTS_DIR,
-            images_dir=IMAGES_DIR,
-        )
-
-    if args.plot_stale_budget:
-        print(f"\n{'='*60}")
-        print(f"Stale rate vs budget sweep (c={args.num_plays}, n_q={args.n_q})")
-        print(f"{'='*60}")
-        from simulate_budgets import run_budget_sweep
-        run_budget_sweep(
-            n_q=args.n_q,
-            num_plays=args.num_plays,
-            clustering_factor=args.clustering_factor,
-            gamma=args.gamma,
-            num_simulations=args.num_simulations,
-            results_dir=RESULTS_DIR,
-            images_dir=IMAGES_DIR,
         )
 
 

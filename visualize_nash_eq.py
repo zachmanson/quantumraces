@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+
 def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization_factor=1500, difficulty_label="high"):
     alice_data, bob_data = {}, {}
     try:
@@ -44,43 +45,59 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
             return
         sorted_tuples = sorted(data.items(), key=lambda x: x[1], reverse=True)
         max_len = max(len(tup) for tup, _ in sorted_tuples)
-        cmap = mcolors.LinearSegmentedColormap.from_list("custom_cmap", ["white", "black"])
 
         if max_len == 1:
-            figsize = min(max(len(sorted_tuples) * 0.6, 8), 12), 3
+            figsize = 6, 3
         else:
             figsize = len(sorted_tuples) * 0.7, max_len * 1.2
+            cmap = mcolors.LinearSegmentedColormap.from_list("custom_cmap", ["white", "black"])
+
+        if player_name == 'Alice':
+            supp_label = r'$\sigma_{\mathrm{A}}(\boldsymbol{k})$'
+        else:
+            supp_label = r'$\sigma_{\mathrm{B}}(\boldsymbol{k})$'
 
         fig, ax = plt.subplots(figsize=figsize)
-        x_ticks = []
+
+        if max_len == 1:
+            iters = [tup[0] / normalization_factor for tup, _ in sorted_tuples]
+            probs = [prob for _, prob in sorted_tuples]
+            num_bins = 20
+            bin_edges = np.linspace(0, 1, num_bins + 1)
+            bin_probs = np.zeros(num_bins)
+            for k, p in zip(iters, probs):
+                idx = min(np.searchsorted(bin_edges, k, side='right') - 1, num_bins - 1)
+                bin_probs[idx] += p
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            bin_width = bin_edges[1] - bin_edges[0]
+            ax.bar(bin_centers, bin_probs, width=bin_width * 0.9, color='black')
+            ax.set_xlabel(r'$\boldsymbol{k}/\kappa$', fontsize=12)
+            if player_name == 'Alice':
+                ax.set_ylabel(r'$\sigma_{\mathrm{A}}(\boldsymbol{k})$', fontsize=12)
+            else:
+                ax.set_ylabel(r'$\sigma_{\mathrm{B}}(\boldsymbol{k})$', fontsize=12)
+            ax.set_xlim(0, 1)
+            ax.text(0.5, -0.3, label, fontsize=10, ha='center', va='top', transform=ax.transAxes)
+            plt.tight_layout()
+            plt.savefig(f'images/{player_name.lower()}_nash_heatmap_c{max_len}_{difficulty_label}.pdf', dpi=300, bbox_inches='tight')
+            plt.show()
+            return
+
         for i, (tup, prob) in enumerate(sorted_tuples):
-            x_ticks.append(i)
             for j, val in enumerate(tup):
                 ax.add_patch(plt.Rectangle((i - 0.5, j - 0.5), 1, 1, facecolor=cmap(val / normalization_factor), edgecolor='black', linewidth=0.5))
         ax.set_xlim(-0.5, len(sorted_tuples) - 0.5)
         ax.set_ylim(max_len - 0.5, -0.5)
 
-        if player_name == 'Alice':
-            supp_label = r'$\sigma_A(\mathbf{k})$'
-        else:
-            supp_label = r'$\sigma_B(\mathbf{k})$'
-
-        ax.set_ylabel('$i$', rotation=0, labelpad=10, fontsize = 14)
+        ax.set_ylabel('$i$', rotation=0, labelpad=10, fontsize=14)
         ax.set_xticks([])
         ax.set_xticklabels([])
 
-        if max_len == 1:
-            for i, (_, prob) in enumerate(sorted_tuples):
-                prob_label = "<0.01" if prob < 0.01 else f"{prob:.2f}"
-                ax.text(i, -0.9, prob_label, fontsize=9, rotation=45,
-                        ha='right', va='top', transform=ax.get_xaxis_transform())
-            ax.set_xlabel(supp_label, fontsize=10, labelpad=40)
-        else:
-            for i, (_, prob) in enumerate(sorted_tuples):
-                prob_label = "<0.01" if prob < 0.01 else f"{prob:.2f}"
-                ax.text(i, max_len - 0.5 + 0.1, prob_label, fontsize=9, rotation=0,
-                        ha='center', va='top', transform=ax.transData)
-            ax.set_xlabel(supp_label, fontsize=10, labelpad=20)
+        for i, (_, prob) in enumerate(sorted_tuples):
+            prob_label = "<0.01" if prob < 0.01 else f"{prob:.2f}"
+            ax.text(i, max_len - 0.5 + 0.1, prob_label, fontsize=9, rotation=0,
+                    ha='center', va='top', transform=ax.transData)
+        ax.set_xlabel(supp_label, fontsize=10, labelpad=20)
 
         ax.set_yticks(np.arange(max_len))
         ax.set_yticklabels([f'${i+1}$' for i in range(max_len)], fontsize=10)
@@ -92,7 +109,7 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         cbar.set_ticklabels(['0', r'$\kappa$'])
         ax.set_aspect('equal', adjustable='box')
 
-        label_y = -0.35 if max_len == 3 else -0.55 if max_len == 2 else -0.30 if max_len == 4 else -3
+        label_y = -0.50 if max_len == 3 else -0.75 if max_len == 2 else -0.45 if max_len == 4 else -3
         ax.text(0.5, label_y, label, fontsize=10, ha='center', va='top', transform=ax.transAxes)
 
         plt.tight_layout()
