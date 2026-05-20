@@ -7,6 +7,18 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
+from multiprocessing import Pool
+import os
+
+_sim_worker = None
+
+def _init_sim_worker(sim):
+    global _sim_worker
+    _sim_worker = sim
+
+def _run_one_simulation(_):
+    return _sim_worker.simulate()
+
 
 class QuantumMiningSimulator:
     def __init__(self,
@@ -30,27 +42,25 @@ class QuantumMiningSimulator:
             self.optimal_iterations = np.floor(np.pi / 4 * np.sqrt(difficulty))
 
         self.seconds_per_iteration = 600 / (self.optimal_iterations)
+        self._theta = math.asin(1 / math.sqrt(self.difficulty))
+        self._measurement_cache = {}
+        alice_strats = nash_equilibrium['Alice']
+        bob_strats = nash_equilibrium['Bob']
+        self._alice_strats = [s[0] for s in alice_strats]
+        self._alice_weights = [s[1] for s in alice_strats]
+        self._bob_strats = [s[0] for s in bob_strats]
+        self._bob_weights = [s[1] for s in bob_strats]
 
     def measurement_probability(self, iterations: int) -> float:
-        theta = math.asin(1 / math.sqrt(self.difficulty))
-        probability = (math.sin((2 * iterations + 1) * theta))**2
-        return probability
+        if iterations not in self._measurement_cache:
+            self._measurement_cache[iterations] = (math.sin((2 * iterations + 1) * self._theta))**2
+        return self._measurement_cache[iterations]
     
     def select_strategy(self) -> tuple[list[float], list[float]]:
-        alice_strats = self.nash_equilibrium['Alice']
-        bob_strats = self.nash_equilibrium['Bob']
-
-        alice_chosen_strat = random.choices(
-            [strat[0] for strat in alice_strats],
-            weights = [strat[1] for strat in alice_strats]
-        )[0]
-
-        bob_chosen_strat = random.choices(
-            [strat[0] for strat in bob_strats],
-            weights = [strat[1] for strat in bob_strats]
-        )[0]
-
-        return alice_chosen_strat, bob_chosen_strat
+        return (
+            random.choices(self._alice_strats, weights=self._alice_weights)[0],
+            random.choices(self._bob_strats, weights=self._bob_weights)[0]
+        )
 
     def time_to_iterations(self, time: float) -> int:
         return time / self.seconds_per_iteration
@@ -111,10 +121,8 @@ class QuantumMiningSimulator:
                 (bob_measurement_times[bob_index] if bob_index < len(bob_measurement_times) else math.inf, 'Bob'),  
                 (classical_block_times[classical_block_times_index] if classical_block_times_index < len(classical_block_times) else math.inf, 'Classical')
             ]
-            events.sort(key=lambda x: x[0])
-
             # Handle simultaneous events
-            event_time = events[0][0]
+            event_time = min(events, key=lambda x: x[0])[0]
             simultaneous_events = [event for event in events if event[0] == event_time]
 
             current_time = event_time
@@ -136,6 +144,8 @@ class QuantumMiningSimulator:
                     num_blocks += 1
                 if bob_success:
                     num_blocks += 1
+                if alice_success and bob_success:
+                    num_forks += 1
 
                 if alice_success or bob_success:
                     classical_block_times = self.generate_classical_block_times(current_time)
@@ -301,18 +311,19 @@ class QuantumMiningSimulator:
         return average_fork_rate, total_blocks, total_forks
 
     def simulate_all(self) -> tuple[float, float, float]:
-        total_fork_rate = 0.0
-        total_blocks = 0.0
-        total_forks = 0.0
+        n_workers = min(os.cpu_count() or 1, self.num_simulations)
+        print_interval = max(1, self.num_simulations // 10)
+        total_blocks = 0
+        total_forks = 0
 
-        for _ in range(self.num_simulations):
-            #print('Simulation {} of {}'.format(_ + 1, self.num_simulations))
-            fork_rate, blocks_found, forks = self.simulate()
-            total_fork_rate += fork_rate
-            total_blocks += blocks_found
-            total_forks += forks
+        with Pool(processes=n_workers, initializer=_init_sim_worker, initargs=(self,)) as pool:
+            for i, result in enumerate(pool.imap_unordered(_run_one_simulation, range(self.num_simulations)), 1):
+                total_blocks += result[1]
+                total_forks += result[2]
+                if i % print_interval == 0:
+                    print(f"  {i}/{self.num_simulations} simulations complete ({100 * i // self.num_simulations}%)")
 
-        average_fork_rate = total_fork_rate / self.num_simulations
+        average_fork_rate = total_forks / total_blocks if total_blocks > 0 else 0.0
         average_blocks = total_blocks / self.num_simulations
         average_forks = total_forks / self.num_simulations
 
@@ -321,86 +332,96 @@ class QuantumMiningSimulator:
 def format_func(x, pos):
     return f'$2^{{{int(np.log2(x))}}}$'
 
-def simulate_multiple_strategies():
+def simulate_multiple_strategies(num_simulations=10000, results_dir='.', images_dir='images'):
     strategies = [
-        {'num_plays': 1, 'K': 50, 'label': r'$c=1$', 'color': 'blue', 'marker': 'o'},
-        {'num_plays': 2, 'K': 25, 'label': r'$c=2$', 'color': 'red', 'marker': 's'},
-        {'num_plays': 3, 'K': 15, 'label': r'$c=3$', 'color': 'green', 'marker': '^'},
-        {'num_plays': 4, 'K': 15, 'label': r'$c=4$', 'color': 'purple', 'marker': 'd'}
+        {'num_plays': 1, 'n_q': 50, 'label': r'$c=1$', 'color': 'blue', 'marker': 'o'},
+        {'num_plays': 2, 'n_q': 25, 'label': r'$c=2$', 'color': 'red', 'marker': 's'},
+        {'num_plays': 3, 'n_q': 15, 'label': r'$c=3$', 'color': 'green', 'marker': '^'},
+        {'num_plays': 4, 'n_q': 15, 'label': r'$c=4$', 'color': 'purple', 'marker': 'd'}
     ]
-    
+
     difficulties = [2**30, 2**31, 2**32, 2**33, 2**34, 2**35, 2**36, 2**37, 2**38, 2**39, 2**40, 2**41, 2**42, 2**43, 2**44, 2**45]
-    
+
     clustering_factor = 2.0
     gamma = 0.5
-    num_simulations = 1000000
-    
+
+    import os, tempfile
+    os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(images_dir, exist_ok=True)
+
     fig, ax = plt.subplots(figsize=(10, 6))
-    
+
     for strategy in strategies:
         num_plays = strategy['num_plays']
-        K = strategy['K']
+        n_q = strategy['n_q']
         print(f"\n{'='*60}")
-        print(f"Processing strategy: c={num_plays}, K={K}")
+        print(f"Processing strategy: c={num_plays}, n_q={n_q}")
         print(f"{'='*60}")
-        
+
         fork_rates = []
         csv_data = []
-        
+
         for difficulty in difficulties:
             print(f"Difficulty: 2^{int(np.log2(difficulty))}")
-            
-            out_fname = 'temp_nash_output.txt'
-            payoff_builder = BuildPayoff(K, num_plays, difficulty, clustering_factor, gamma, out_fname, scale_with_D=False)
-            A = payoff_builder.get_payoff()
-            B = payoff_builder.get_payoff(bob=True)
-            
-            payoff_builder.get_nash_eq_pygambit(A, B)
-            print('Nash equilibrium found!')
-            
-            analyzer = NashEquilibriaAnalyzer()
-            nash_eq = analyzer.converge(out_fname)
-            
-            print('Beginning simulation...')
-            simulator = QuantumMiningSimulator(nash_eq, num_simulations, difficulty=difficulty)
-            avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
-            print(f'Average Stale Rate: {avg_fork_rate}')
-            
-            fork_rates.append(avg_fork_rate)
-            
-            csv_data.append({
-                'difficulty': difficulty,
-                'log2_difficulty': int(np.log2(difficulty)),
-                'stale_rate': avg_fork_rate,
-                'threshold': (1 - avg_fork_rate) / (2 - avg_fork_rate),
-                'avg_blocks': avg_blocks,
-                'avg_forks': avg_forks
-            })
-        
-        csv_filename = f'simulation_difficulties_c{num_plays}.csv'
+
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp:
+                out_fname = tmp.name
+
+            try:
+                payoff_builder = BuildPayoff(n_q, num_plays, difficulty, clustering_factor, gamma, out_fname, scale_with_D=False)
+                A = payoff_builder.get_payoff()
+                B = payoff_builder.get_payoff(bob=True)
+
+                payoff_builder.get_nash_eq_pygambit(A, B)
+                print('Nash equilibrium found!')
+
+                analyzer = NashEquilibriaAnalyzer()
+                nash_eq = analyzer.converge(out_fname)
+
+                print('Beginning simulation...')
+                simulator = QuantumMiningSimulator(nash_eq, num_simulations, difficulty=difficulty)
+                avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
+                print(f'Average Stale Rate: {avg_fork_rate}')
+
+                fork_rates.append(avg_fork_rate)
+
+                csv_data.append({
+                    'difficulty': difficulty,
+                    'log2_difficulty': int(np.log2(difficulty)),
+                    'stale_rate': avg_fork_rate,
+                    'threshold': (1 - avg_fork_rate) / (2 - avg_fork_rate),
+                    'avg_blocks': avg_blocks,
+                    'avg_forks': avg_forks
+                })
+            finally:
+                if os.path.exists(out_fname):
+                    os.remove(out_fname)
+
+        csv_filename = os.path.join(results_dir, f'simulation_difficulties_c{num_plays}.csv')
         df = pd.DataFrame(csv_data)
         df.to_csv(csv_filename, index=False)
         print(f"\nData saved to: {csv_filename}")
-        
-        ax.plot(difficulties, fork_rates, 
-                marker=strategy['marker'], 
+
+        ax.plot(difficulties, fork_rates,
+                marker=strategy['marker'],
                 linestyle='-',
                 color=strategy['color'],
                 label=strategy['label'],
                 linewidth=2,
                 markersize=8)
-    
+
     ax.set_xscale('log', base=2)
     ax.xaxis.set_major_formatter(FuncFormatter(format_func))
     ax.set_xlabel(r'$D$', fontsize=12)
     ax.set_ylabel(r'$p_\text{stale}$', fontsize=12)
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=10, loc='best')
-    
+
     plt.tight_layout()
-    plt.savefig('images/stale_rate_vs_difficulty_all_strategies.pdf', dpi=300)
+    plot_path = os.path.join(images_dir, 'stale_rate_vs_difficulty_all_strategies.pdf')
+    plt.savefig(plot_path, dpi=300)
     plt.show()
-    
+
     print(f"\n{'='*60}")
     print("All simulations complete!")
     print(f"{'='*60}")
