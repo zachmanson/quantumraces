@@ -6,7 +6,7 @@ Given the input parameters, this code populates the payoff matrices for our two-
 
 ## Data
 
-The data accompanying the paper is found in `data/`. This includes the Nash equilibrium files (`.txt`) and raw simulation outputs (`.csv`) for each configuration of $c$ and difficulty regime used in the paper.
+The data used to produce the results of this paper is found in `data/`. This includes the Nash equilibrium files (`.txt`) and raw simulation outputs (`.csv`) for each configuration of $c$ and difficulty regime used.
 
 ## Installation
 
@@ -16,7 +16,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-The main entry point is `run.py`. It can run the full pipeline (build payoff matrices → compute Nash equilibrium → simulate), or individual stages.
+`run.py` runs the full pipeline (build payoff matrices → compute Nash equilibrium → simulate), or can run individual stages.
 
 ```bash
 python run.py [options]
@@ -29,12 +29,12 @@ python run.py [options]
 | `--D` | `high` | Difficulty: `high` (~1.19×10¹⁴, Bitcoin May 2025), `low` (~3.65×10⁶, Bitcoin 2013), `ideal` (high D with uncapped Grover iterations), or a numeric value |
 | `-c`, `--num-plays` | `3` | Number of Grover search plays |
 | `--n-q` | `35` | Number of grid points for strategy discretisation |
-| `--gamma` | `0.5` | Payoff split parameter |
-| `--clustering-factor` | `2.0` | Controls the distribution of grid points across the strategy space (higher = denser at high iteration counts) |
+| `--gamma` | `0.5` | Sattath's propagation parameter |
+| `--clustering-factor` | `2.0` | Controls the clustering of grid points in the discretized straetgy space (higher = denser at high iteration counts) |
 | `--num-simulations` | `1,000,000` | Number of Monte Carlo simulations |
 | `--scale-with-D` | off | Scale max Grover iterations with D instead of capping at 2³² |
 
-### Common invocations
+### Common usages
 
 ```bash
 # Full pipeline (default: c=3, high D)
