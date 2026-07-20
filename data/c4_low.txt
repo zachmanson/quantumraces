@@ -1,0 +1,15 @@
+Alice [np.int64(0), np.int64(0), np.int64(833), np.int64(560)] 0.2379733759360589
+Alice [np.int64(0), np.int64(0), np.int64(990), np.int64(458)] 0.12312780975327367
+Alice [np.int64(0), np.int64(0), np.int64(1125), np.int64(352)] 0.07915641474635288
+Alice [np.int64(0), np.int64(0), np.int64(1289), np.int64(122)] 0.014105281903758685
+Alice [np.int64(656), np.int64(0), np.int64(0), np.int64(747)] 0.010230878200696005
+Alice [np.int64(656), np.int64(0), np.int64(560), np.int64(240)] 0.4036668624129315
+Alice [np.int64(656), np.int64(0), np.int64(656), np.int64(122)] 0.13173937704692837
+Bob [np.int64(0), np.int64(0), np.int64(747), np.int64(747)] 0.0962139550653716
+Bob [np.int64(0), np.int64(0), np.int64(914), np.int64(560)] 0.1712404093132955
+Bob [np.int64(0), np.int64(0), np.int64(1060), np.int64(352)] 0.102082746845225
+Bob [np.int64(0), np.int64(0), np.int64(1185), np.int64(240)] 0.09045001480084466
+Bob [np.int64(0), np.int64(747), np.int64(560), np.int64(122)] 0.30513397779947726
+Bob [np.int64(560), np.int64(0), np.int64(0), np.int64(833)] 0.171421569461353
+Bob [np.int64(560), np.int64(0), np.int64(747), np.int64(122)] 0.06345732671443295
+-------------

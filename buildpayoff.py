@@ -54,7 +54,7 @@ class BuildPayoff:
         self.out_fname = out_fname
 
     def create_quadratic_grid(self) -> np.ndarray:
-        linear_grid = np.linspace(0, 1, self.n_q + 1)
+        linear_grid = np.linspace(0, 1, self.n_q)
         quadratic_grid = 1 - (1 - linear_grid)**self.clustering_factor
         scaled_grid = quadratic_grid * self.max_K
         rounded_grid = np.round(scaled_grid).astype(int)
@@ -365,34 +365,3 @@ class BuildPayoff:
         
         return expected_payoff
 
-def main():
-    n_q = 34 #number of pure strategies (including 0 so n_q=1 means 2 strategies)
-    num_plays = 3 #number of plays
-    D = 119116256505723.5 #difficulty as of May 9 2025
-    #D = 3651011.631 #difficulty as of Feb 26 2013
-    clustering_factor = 2.0
-    gamma = 0.5
-
-    builder = BuildPayoff(n_q, num_plays, D, clustering_factor, gamma, scale_with_D = False, stop_after = 1)   
-    builder.test_quadratic_grid()
-    A = builder.get_payoff()
-    B = builder.get_payoff(bob=True)
-
-    A, B = builder.eliminate_dominated(A, B)
-    print("Payoff matrix for Alice:")
-    print(A)
-    print("Payoff matrix for Bob:")
-    print(B)
-
-    #analyze extreme payoffs
-    #builder.analyze_extreme_payoffs(A, B, player_name="Alice")
-    #builder.analyze_extreme_payoffs(B, A, player_name="Bob")
-
-    print('Payoff matrices created!')
-    
-    builder.get_nash_eq_pygambit(A, B)
-    
-
-
-if __name__ == "__main__":
-    main()

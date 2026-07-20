@@ -25,7 +25,7 @@ def compute_base_max_k(D: float) -> int:
     return int(np.floor(np.pi / 4 * np.sqrt(min(D, 2**32))))
 
 
-def run_budget_sweep(n_q=20, num_plays=2, clustering_factor=2.0, gamma=0.5,
+def run_budget_sweep(n_q=21, num_plays=2, clustering_factor=2.0, gamma=0.5,
                      num_simulations=10000, results_dir='.', images_dir='images'):
     difficulties = [2**exp for exp in range(30, 41)]  # 2^30 to 2^40
     multipliers = np.arange(1.0, 10.5, 0.5)           # 1.0, 1.5, ..., 10.0
@@ -79,17 +79,27 @@ def run_budget_sweep(n_q=20, num_plays=2, clustering_factor=2.0, gamma=0.5,
                     scale_with_D=False
                 )
 
-                avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
-                print(f"  Stale rate: {avg_fork_rate:.6f}")
+                stats = simulator.simulate_all()
+                print(f"  Stale rate: {stats['mean_stale_rate']:.6f}")
 
                 rows.append({
                     'log2_difficulty': log2_D,
                     'difficulty': D,
                     'budget_multiplier': multiplier,
                     'max_k': budget,
-                    'stale_rate': avg_fork_rate,
-                    'avg_blocks': avg_blocks,
-                    'avg_forks': avg_forks,
+                    'mean_stale_rate': stats['mean_stale_rate'],
+                    'std_stale_rate': stats['std_stale_rate'],
+                    'p95_stale_rate': stats['p95_stale_rate'],
+                    'p99_stale_rate': stats['p99_stale_rate'],
+                    'max_stale_rate': stats['max_stale_rate'],
+                    'prob_stale_over_third': stats['prob_stale_over_third'],
+                    'prob_stale_over_third_ci_lower': stats['prob_stale_over_third_ci'][0],
+                    'prob_stale_over_third_ci_upper': stats['prob_stale_over_third_ci'][1],
+                    'detection_prob_05': stats['detection_prob_05'],
+                    'detection_prob_05_ci_lower': stats['detection_prob_05_ci'][0],
+                    'detection_prob_05_ci_upper': stats['detection_prob_05_ci'][1],
+                    'avg_blocks': stats['avg_blocks'],
+                    'avg_forks': stats['avg_forks'],
                 })
 
             finally:
@@ -111,7 +121,7 @@ def run_budget_sweep(n_q=20, num_plays=2, clustering_factor=2.0, gamma=0.5,
 
     for i, mult in enumerate(mults):
         for j, log2_d in enumerate(log2_diffs):
-            val = df.loc[(df['log2_difficulty'] == log2_d) & (df['budget_multiplier'] == mult), 'stale_rate']
+            val = df.loc[(df['log2_difficulty'] == log2_d) & (df['budget_multiplier'] == mult), 'mean_stale_rate']
             Z[i, j] = val.values[0] if len(val) else np.nan
 
     fig = plt.figure(figsize=(11, 7))
@@ -137,10 +147,10 @@ def run_budget_sweep(n_q=20, num_plays=2, clustering_factor=2.0, gamma=0.5,
     plt.show()
 
     # Print summary table
-    print(f"\n{'log2(D)':>8}  {'Multiplier':>10}  {'max_K':>8}  {'Stale Rate':>12}")
-    print("-" * 44)
+    print(f"\n{'log2(D)':>8}  {'Multiplier':>10}  {'max_K':>8}  {'Mean Stale':>12}  {'P95':>10}  {'P(>1/3)':>10}  {'Detect(0.05)':>14}")
+    print("-" * 82)
     for row in rows:
-        print(f"{row['log2_difficulty']:>8}  {row['budget_multiplier']:>10.1f}  {row['max_k']:>8}  {row['stale_rate']:>12.6f}")
+        print(f"{row['log2_difficulty']:>8}  {row['budget_multiplier']:>10.1f}  {row['max_k']:>8}  {row['mean_stale_rate']:>12.6f}  {row['p95_stale_rate']:>10.6f}  {row['prob_stale_over_third']:>10.2e}  {row['detection_prob_05']:>14.4f}")
 
 
 if __name__ == "__main__":

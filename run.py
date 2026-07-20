@@ -19,12 +19,13 @@ Examples:
 import argparse
 import os
 import sys
+import time
 
 import numpy as np
 
 from buildpayoff import BuildPayoff
 from analyze_nasheqs import NashEquilibriaAnalyzer
-from simulate_mining import QuantumMiningSimulator
+from simulate_mining import QuantumMiningSimulator, CLASSICAL_STALE_RATE
 from util import parse_nash_eq_from_file
 
 D_HIGH = 119116256505723.5   # Bitcoin difficulty as of May 9 2025
@@ -32,6 +33,7 @@ D_LOW  = 3651011.631          # Bitcoin difficulty as of Feb 26 2013
 
 RESULTS_DIR = 'results'
 IMAGES_DIR  = 'images'
+DATA_DIR    = 'data'
 
 
 def parse_args():
@@ -46,7 +48,7 @@ def parse_args():
     )
     parser.add_argument('--num-plays', '-c', type=int, default=3,
                         help='Number of Grover search plays (default: 3)')
-    parser.add_argument('--n-q', type=int, default=34, dest='n_q',
+    parser.add_argument('--n-q', type=int, default=35, dest='n_q',
                         help='Number of grid points for strategy discretization (default: 34)')
     parser.add_argument('--gamma', type=float, default=0.5,
                         help='Payoff split parameter (default: 0.5)')
@@ -70,6 +72,8 @@ def parse_args():
                         help='Compute and print expected payoffs (use with --simulate-from)')
     parser.add_argument('--simulate-from', metavar='FILE',
                         help='Skip pipeline, load Nash eq from FILE and run simulation only')
+    parser.add_argument('--csv-path', metavar='FILE', default=None,
+                        help='Override output CSV path for raw simulation data')
     return parser.parse_args()
 
 
@@ -96,7 +100,8 @@ def _difficulty_label(D: float, scale_with_D: bool) -> str:
 
 
 def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
-                 plot_heatmap=False, compute_ep=False, gamma=0.5, no_simulate=False):
+                 plot_heatmap=False, compute_ep=False, gamma=0.5, no_simulate=False,
+                 csv_path=None):
     """Load a Nash eq file and run the Monte Carlo simulation."""
 
     # Determine difficulty label
@@ -113,7 +118,7 @@ def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
             num_plays = len(next(iter(alice_mixed.keys())))
             max_iters = max(all_iters)
             ep_builder = BuildPayoff(
-                n_q=max_iters, num_plays=num_plays, D=D,
+                n_q=max_iters + 1, num_plays=num_plays, D=D,
                 clustering_factor=1.0, gamma=gamma,
                 scale_with_D=scale_with_D
             )
@@ -136,7 +141,7 @@ def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
 
     # Skip simulation if requested
     if no_simulate:
-        return None, None, None
+        return None
 
     print(f"\n{'='*60}")
     print("Running Monte Carlo simulation")
@@ -147,14 +152,22 @@ def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
     simulator = QuantumMiningSimulator(
         nash_eq, num_simulations=num_simulations, difficulty=D, scale_with_D=scale_with_D
     )
-    avg_fork_rate, avg_blocks, avg_forks = simulator.simulate_all()
+    _t0 = time.time()
+    stats = simulator.simulate_all(csv_path=csv_path)
+    print(f"  Simulation time:     {time.time() - _t0:.1f}s")
+    lo3, hi3 = stats['prob_stale_over_third_ci']
+    lod, hid = stats['detection_prob_05_ci']
     print(f"\n{'='*60}")
     print("Results")
     print(f"{'='*60}")
-    print(f"  Stale rate:          {avg_fork_rate:.7f}")
-    print(f"  Avg blocks/day:      {avg_blocks:.5f}")
-    print(f"  Avg forks/day:       {avg_forks:.5f}")
-    return avg_fork_rate, avg_blocks, avg_forks
+    print(f"  95th percentile:          {stats['p95_stale_rate']:.6f}")
+    print(f"  99th percentile:          {stats['p99_stale_rate']:.6f}")
+    print(f"  Max stale rate:           {stats['max_stale_rate']:.6f}")
+    print(f"  P(stale > 1/3):           {stats['prob_stale_over_third']:.6f}  (95% CI: [{lo3:.6f}, {hi3:.6f}])")
+    print(f"  Detection prob (α=0.05):  {stats['detection_prob_05']:.6f}  (95% CI: [{lod:.6f}, {hid:.6f}])")
+    print(f"  Avg blocks/day:           {stats['avg_blocks']:.6f}")
+    print(f"  Avg forks/day:            {stats['avg_forks']:.6f}")
+    return stats
 
 
 def run_pipeline(D, num_plays, n_q, gamma, clustering_factor, num_simulations, stop_after,
@@ -202,7 +215,7 @@ def run_pipeline(D, num_plays, n_q, gamma, clustering_factor, num_simulations, s
     if all_iters:
         max_iters = max(all_iters)
         ep_builder = BuildPayoff(
-            n_q=max_iters, num_plays=num_plays, D=D,
+            n_q=max_iters + 1, num_plays=num_plays, D=D,
             clustering_factor=1.0, gamma=gamma,
             scale_with_D=False
         )
@@ -218,10 +231,13 @@ def run_pipeline(D, num_plays, n_q, gamma, clustering_factor, num_simulations, s
 
     if no_simulate:
         print("\nSkipping simulation (--no-simulate).")
-        return None, None, None
+        return None
 
     # --- Simulate stale rate ---
-    return run_simulate(nash_fname, num_simulations, D, scale_with_D)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    difficulty_label = _difficulty_label(D, scale_with_D)
+    csv_path = os.path.join(DATA_DIR, f'simulation_data_c{num_plays}_{difficulty_label}.csv')
+    return run_simulate(nash_fname, num_simulations, D, scale_with_D, csv_path=csv_path)
 
 
 def main():
@@ -229,7 +245,7 @@ def main():
     D = resolve_D(args.D)
     scale_with_D = args.scale_with_D or (args.D == 'ideal')
     if args.num_simulations is None:
-        args.num_simulations = 10000 if args.plot_stale_difficulty else 1000000
+        args.num_simulations = 50000 if args.plot_stale_difficulty else 1000000
 
     if args.plot_stale_difficulty:
         print(f"\n{'='*60}")
@@ -240,6 +256,7 @@ def main():
             num_simulations=args.num_simulations,
             results_dir=RESULTS_DIR,
             images_dir=IMAGES_DIR,
+            data_dir=DATA_DIR,
         )
     elif args.plot_stale_budget:
         print(f"\n{'='*60}")
@@ -260,6 +277,11 @@ def main():
             print(f"Error: file not found: {args.simulate_from}")
             sys.exit(1)
         print(f"Loading Nash equilibrium from: {args.simulate_from}")
+        os.makedirs(DATA_DIR, exist_ok=True)
+        difficulty_label = _difficulty_label(D, scale_with_D)
+        alice_mixed, _ = parse_nash_eq_from_file(args.simulate_from)
+        num_plays = len(next(iter(alice_mixed.keys()))) if alice_mixed else args.num_plays
+        csv_path = args.csv_path or os.path.join(DATA_DIR, f'simulation_data_c{num_plays}_{difficulty_label}.csv')
         run_simulate(
             args.simulate_from,
             args.num_simulations,
@@ -269,6 +291,7 @@ def main():
             compute_ep=args.compute_ep,
             gamma=args.gamma,
             no_simulate=args.no_simulate,
+            csv_path=csv_path,
         )
     else:
         run_pipeline(

@@ -50,12 +50,3 @@ class NashEquilibriaAnalyzer:
         nash_eqs = self.parse_data(data)
         chosen_eq = self.choose_eq(nash_eqs)
         return chosen_eq
-    
-
-if __name__ == "__main__":
-    analyzer = NashEquilibriaAnalyzer()
-    nash_eq = analyzer.converge('output.txt')
-    for player, strategies in nash_eq.items():
-        print(f"{player}:")
-        for strategy, value in strategies:
-            print(f"  Strategy: {strategy}, Value: {value}")

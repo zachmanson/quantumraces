@@ -1,6 +1,11 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+
+matplotlib.rc('text', usetex=True)
+matplotlib.rc('font', family='serif')
+matplotlib.rc('text.latex', preamble=r'\usepackage{bm}\usepackage[T1]{fontenc}')
 
 
 def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization_factor=1500, difficulty_label="high"):
@@ -40,48 +45,38 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         elif player == 'Bob':
             bob_data[tuple(current_tuple)] = probability
 
+    def _plot_histogram_ax(ax, data, normalization_factor, ylabel, panel_label):
+        sorted_tuples = sorted(data.items(), key=lambda x: x[1], reverse=True)
+        iters = [tup[0] / normalization_factor for tup, _ in sorted_tuples]
+        probs = [prob for _, prob in sorted_tuples]
+        num_bins = 20
+        bin_edges = np.linspace(0, 1, num_bins + 1)
+        bin_probs = np.zeros(num_bins)
+        for k, p in zip(iters, probs):
+            idx = min(np.searchsorted(bin_edges, k, side='right') - 1, num_bins - 1)
+            bin_probs[idx] += p
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        bin_width = bin_edges[1] - bin_edges[0]
+        ax.bar(bin_centers, bin_probs, width=bin_width * 0.9, color='black')
+        ax.set_xlabel(r'$\bm{k}/\kappa$', fontsize=12)
+        ax.set_ylabel(ylabel, fontsize=12)
+        ax.set_xlim(0, 1)
+        ax.text(0.5, -0.25, panel_label, fontsize=10, ha='center', va='top', transform=ax.transAxes)
+
     def create_discrete_heatmap(player_name, data, label, normalization_factor, difficulty_label):
         if not data:
             return
         sorted_tuples = sorted(data.items(), key=lambda x: x[1], reverse=True)
         max_len = max(len(tup) for tup, _ in sorted_tuples)
 
-        if max_len == 1:
-            figsize = 6, 3
-        else:
-            figsize = len(sorted_tuples) * 0.7, max_len * 1.2
-            cmap = mcolors.LinearSegmentedColormap.from_list("custom_cmap", ["white", "black"])
-
         if player_name == 'Alice':
-            supp_label = r'$\sigma_{\mathrm{A}}(\boldsymbol{k})$'
+            supp_label = r'$\sigma_{\mathrm{A}}(\bm{k})$'
         else:
-            supp_label = r'$\sigma_{\mathrm{B}}(\boldsymbol{k})$'
+            supp_label = r'$\sigma_{\mathrm{B}}(\bm{k})$'
 
+        figsize = len(sorted_tuples) * 0.7, max_len * 1.2
+        cmap = mcolors.LinearSegmentedColormap.from_list("custom_cmap", ["white", "black"])
         fig, ax = plt.subplots(figsize=figsize)
-
-        if max_len == 1:
-            iters = [tup[0] / normalization_factor for tup, _ in sorted_tuples]
-            probs = [prob for _, prob in sorted_tuples]
-            num_bins = 20
-            bin_edges = np.linspace(0, 1, num_bins + 1)
-            bin_probs = np.zeros(num_bins)
-            for k, p in zip(iters, probs):
-                idx = min(np.searchsorted(bin_edges, k, side='right') - 1, num_bins - 1)
-                bin_probs[idx] += p
-            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-            bin_width = bin_edges[1] - bin_edges[0]
-            ax.bar(bin_centers, bin_probs, width=bin_width * 0.9, color='black')
-            ax.set_xlabel(r'$\boldsymbol{k}/\kappa$', fontsize=12)
-            if player_name == 'Alice':
-                ax.set_ylabel(r'$\sigma_{\mathrm{A}}(\boldsymbol{k})$', fontsize=12)
-            else:
-                ax.set_ylabel(r'$\sigma_{\mathrm{B}}(\boldsymbol{k})$', fontsize=12)
-            ax.set_xlim(0, 1)
-            ax.text(0.5, -0.3, label, fontsize=10, ha='center', va='top', transform=ax.transAxes)
-            plt.tight_layout()
-            plt.savefig(f'images/{player_name.lower()}_nash_heatmap_c{max_len}_{difficulty_label}.pdf', dpi=300, bbox_inches='tight')
-            plt.show()
-            return
 
         for i, (tup, prob) in enumerate(sorted_tuples):
             for j, val in enumerate(tup):
@@ -94,10 +89,10 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         ax.set_xticklabels([])
 
         for i, (_, prob) in enumerate(sorted_tuples):
-            prob_label = "<0.01" if prob < 0.01 else f"{prob:.2f}"
-            ax.text(i, max_len - 0.5 + 0.1, prob_label, fontsize=9, rotation=0,
+            prob_label = r"$\mathord{<}0.01$" if prob < 0.01 else f"{prob:.2f}"
+            ax.text(i, max_len - 0.5 + 0.1, prob_label, fontsize=11, rotation=0,
                     ha='center', va='top', transform=ax.transData)
-        ax.set_xlabel(supp_label, fontsize=10, labelpad=20)
+        ax.set_xlabel(supp_label, fontsize=12, labelpad=20)
 
         ax.set_yticks(np.arange(max_len))
         ax.set_yticklabels([f'${i+1}$' for i in range(max_len)], fontsize=10)
@@ -116,8 +111,21 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         plt.savefig(f'images/{player_name.lower()}_nash_heatmap_c{max_len}_{difficulty_label}.pdf', dpi=300, bbox_inches='tight')
         plt.show()
 
-    create_discrete_heatmap('Alice', alice_data, '(a)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
-    create_discrete_heatmap('Bob', bob_data, '(b)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
+    # For c=1, both players share a single side-by-side figure
+    alice_sorted = sorted(alice_data.items(), key=lambda x: x[1], reverse=True) if alice_data else []
+    bob_sorted   = sorted(bob_data.items(),   key=lambda x: x[1], reverse=True) if bob_data   else []
+    alice_max_len = max((len(t) for t, _ in alice_sorted), default=0)
+    bob_max_len   = max((len(t) for t, _ in bob_sorted),   default=0)
 
-if __name__ == '__main__':
-    visualize_nash_equilibria_discrete_file()
+    if alice_max_len == 1 and bob_max_len == 1:
+        fig, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(10, 3.5))
+        _plot_histogram_ax(ax_a, alice_data, normalization_factor,
+                           ylabel=r'$\sigma_{\mathrm{A}}(\bm{k})$', panel_label='(a)')
+        _plot_histogram_ax(ax_b, bob_data,   normalization_factor,
+                           ylabel=r'$\sigma_{\mathrm{B}}(\bm{k})$', panel_label='(b)')
+        plt.tight_layout()
+        plt.savefig(f'images/nash_heatmap_c1_{difficulty_label}.pdf', dpi=300, bbox_inches='tight')
+        plt.show()
+    else:
+        create_discrete_heatmap('Alice', alice_data, '(a)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
+        create_discrete_heatmap('Bob', bob_data, '(b)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
