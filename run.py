@@ -64,8 +64,6 @@ def parse_args():
                         help='Plot Nash equilibrium strategy heatmaps')
     parser.add_argument('--plot-stale-difficulty', action='store_true',
                         help='Sweep difficulties c=1..4 and plot stale rate vs difficulty')
-    parser.add_argument('--plot-stale-budget', action='store_true',
-                        help='Sweep budget multipliers and plot stale rate vs budget')
     parser.add_argument('--no-simulate', action='store_true',
                         help='Skip Monte Carlo simulation, only compute Nash equilibrium')
     parser.add_argument('--compute-ep', action='store_true',
@@ -257,20 +255,6 @@ def main():
             results_dir=RESULTS_DIR,
             images_dir=IMAGES_DIR,
             data_dir=DATA_DIR,
-        )
-    elif args.plot_stale_budget:
-        print(f"\n{'='*60}")
-        print(f"Stale rate vs budget sweep (c={args.num_plays}, n_q={args.n_q})")
-        print(f"{'='*60}")
-        from simulate_budgets import run_budget_sweep
-        run_budget_sweep(
-            n_q=args.n_q,
-            num_plays=args.num_plays,
-            clustering_factor=args.clustering_factor,
-            gamma=args.gamma,
-            num_simulations=args.num_simulations,
-            results_dir=RESULTS_DIR,
-            images_dir=IMAGES_DIR,
         )
     elif args.simulate_from:
         if not os.path.exists(args.simulate_from):
