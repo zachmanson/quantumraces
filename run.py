@@ -2,38 +2,39 @@
 """
 Unified entry point for the Quantum Races analysis pipeline.
 
-Pipeline: build payoff matrices -> compute Nash equilibrium -> estimate stale rate -> report
+Pipeline: build payoff matrices -> eliminate dominated strategies -> Nash equilibria (Lemke-Howson)
+-> expected payoffs -> heatmaps -> Monte Carlo stale-rate simulation, for one (regime, c, n_q) configuration.
 
-D presets:
-  high  - Bitcoin difficulty as of May 9 2025 (~1.19e14)
-  low   - Bitcoin difficulty as of Feb 26 2013 (~3.65e6)
+Regimes:
+  nonce-only   - the oracle searches the 32-bit nonce; kappa = k_opt^32 = 51471
+  full-header  - the oracle searches the full header; kappa = k_opt(W)
+
+Each run writes to --out-dir and is resumable: a rerun reuses saved equilibria and simulation data
+(use --force to recompute).
 
 Examples:
-  python run.py
-  python run.py --D low --num-plays 2 --n-q 25
-  python run.py --D 5000000 --plot-heatmap
-  python run.py --plot-stale-difficulty --num-simulations 100000
-  python run.py --plot-stale-budget --n-q 20 --num-plays 2
+  python run.py --regime full-header -c 2 --n-q 45
+  python run.py --regime nonce-only -c 3 --n-q 35 --stop-after 2
+  python run.py --regime nonce-only --simulate-from results_v2/nash_eq_c1_nonce-only.txt
 """
 
 import argparse
+import json
 import os
+import shlex
+import subprocess
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
-from buildpayoff import BuildPayoff
-from analyze_nasheqs import NashEquilibriaAnalyzer
-from simulate_mining import QuantumMiningSimulator, CLASSICAL_STALE_RATE
-from util import parse_nash_eq_from_file
+import buildpayoff as bp
+import simulate_mining as sim
+from util import read_equilibrium, write_equilibria
 
-D_HIGH = 119116256505723.5   # Bitcoin difficulty as of May 9 2025
-D_LOW  = 3651011.631          # Bitcoin difficulty as of Feb 26 2013
-
-RESULTS_DIR = 'results'
-IMAGES_DIR  = 'images'
-DATA_DIR    = 'data'
+DEFAULT_SEED = 20261025
 
 
 def parse_args():
@@ -42,254 +43,190 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
-    parser.add_argument(
-        '--D', default='high',
-        help="Difficulty: 'high' (current, ~1.19e14), 'low' (2013, ~3.65e6), 'ideal' (high + scale-with-D), or a numeric value. Default: high"
-    )
+    parser.add_argument('--regime', choices=bp.REGIMES, required=True,
+                        help='Mining regime: nonce-only or full-header')
+    parser.add_argument('--D', type=float, default=bp.D_2025,
+                        help=f'Network difficulty (default: {bp.D_2025}, 9 May 2025)')
     parser.add_argument('--num-plays', '-c', type=int, default=3,
-                        help='Number of Grover search plays (default: 3)')
+                        help='Number of measurements per race, c (default: 3)')
     parser.add_argument('--n-q', type=int, default=35, dest='n_q',
-                        help='Number of grid points for strategy discretization (default: 34)')
+                        help='Grid resolution: S0\' has up to n_q + 1 iteration counts (default: 35)')
     parser.add_argument('--gamma', type=float, default=0.5,
-                        help='Payoff split parameter (default: 0.5)')
-    parser.add_argument('--clustering-factor', type=float, default=2.0,
-                        help='Grid clustering factor (default: 2.0)')
-    parser.add_argument('--num-simulations', type=int, default=None,
-                        help='Number of Monte Carlo simulations (default: 10000 for --plot-stale-difficulty, 1000000 otherwise)')
+                        help='Sattath\'s propagation parameter gamma_S (default: 0.5)')
     parser.add_argument('--stop-after', type=int, default=1,
-                        help='Stop after N Nash equilibria (default: 1)')
-    parser.add_argument('--scale-with-D', action='store_true',
-                        help='Scale max iterations with D instead of capping at 2^32 (default: False)')
-    parser.add_argument('--plot-heatmap', action='store_true',
-                        help='Plot Nash equilibrium strategy heatmaps')
-    parser.add_argument('--plot-stale-difficulty', action='store_true',
-                        help='Sweep difficulties c=1..4 and plot stale rate vs difficulty')
+                        help='Number of Nash equilibria to compute (default: 1)')
+    parser.add_argument('--num-simulations', type=int, default=1_000_000,
+                        help='Number of simulated days (default: 1000000)')
+    parser.add_argument('--seed', type=int, default=DEFAULT_SEED,
+                        help=f'Master seed for the simulation (default: {DEFAULT_SEED})')
+    parser.add_argument('--processes', type=int, default=None,
+                        help='Worker processes for the simulation (default: all CPUs)')
+    parser.add_argument('--out-dir', default='results_v2',
+                        help='Output directory (default: results_v2)')
     parser.add_argument('--no-simulate', action='store_true',
-                        help='Skip Monte Carlo simulation, only compute Nash equilibrium')
-    parser.add_argument('--compute-ep', action='store_true',
-                        help='Compute and print expected payoffs (use with --simulate-from)')
+                        help='Skip the Monte Carlo simulation')
+    parser.add_argument('--no-plot', action='store_true',
+                        help='Skip the heatmaps')
+    parser.add_argument('--force', action='store_true',
+                        help='Recompute outputs that already exist')
     parser.add_argument('--simulate-from', metavar='FILE',
-                        help='Skip pipeline, load Nash eq from FILE and run simulation only')
-    parser.add_argument('--csv-path', metavar='FILE', default=None,
-                        help='Override output CSV path for raw simulation data')
+                        help='Skip the game; load one equilibrium from FILE, then compute payoffs, plots, simulation')
     return parser.parse_args()
 
 
-def resolve_D(d_arg: str) -> float:
-    if d_arg == 'high':
-        return D_HIGH
-    if d_arg == 'low':
-        return D_LOW
-    if d_arg == 'ideal':
-        return D_HIGH
+def _git_commit() -> str:
     try:
-        return float(d_arg)
-    except ValueError:
-        print(f"Error: --D must be 'high', 'low', 'ideal', or a numeric value. Got: {d_arg!r}")
-        sys.exit(1)
+        return subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True,
+                              cwd=Path(__file__).resolve().parent).stdout.strip()
+    except OSError:
+        return 'unknown'
 
 
-def _difficulty_label(D: float, scale_with_D: bool) -> str:
-    if D == D_LOW:
-        return "low"
-    elif scale_with_D:
-        return "ideal"
-    return "high"
+def _matrix_stats(M: np.ndarray) -> dict:
+    return {'min': float(M.min()), 'max': float(M.max()), 'entries': int(M.size),
+            'distinct': int(np.unique(M).size)}
 
 
-def run_simulate(nash_fname, num_simulations, D, scale_with_D=False,
-                 plot_heatmap=False, compute_ep=False, gamma=0.5, no_simulate=False,
-                 csv_path=None):
-    """Load a Nash eq file and run the Monte Carlo simulation."""
+def _describe_mixed(mixed: dict, kap: int) -> list:
+    return [{'strategy': list(s), 'fraction_of_kappa': [k / kap for k in s], 'probability': prob}
+            for s, prob in sorted(mixed.items(), key=lambda x: -x[1])]
 
-    # Determine difficulty label
-    difficulty_label = _difficulty_label(D, scale_with_D)
 
-    # Compute expected payoffs if requested
-    if compute_ep:
-        print(f"\n{'='*60}")
-        print("Computing expected payoffs")
-        print(f"{'='*60}")
-        alice_mixed, bob_mixed = parse_nash_eq_from_file(nash_fname)
-        all_iters = [v for strat in list(alice_mixed.keys()) + list(bob_mixed.keys()) for v in strat]
-        if all_iters and alice_mixed and bob_mixed:
-            num_plays = len(next(iter(alice_mixed.keys())))
-            max_iters = max(all_iters)
-            ep_builder = BuildPayoff(
-                n_q=max_iters + 1, num_plays=num_plays, D=D,
-                clustering_factor=1.0, gamma=gamma,
-                scale_with_D=scale_with_D
-            )
-            alice_ep = ep_builder.compute_expected_payoff(alice_mixed, bob_mixed, player="Alice")
-            bob_ep   = ep_builder.compute_expected_payoff(alice_mixed, bob_mixed, player="Bob")
-            print(f"  Alice expected payoff: {alice_ep:.6f}")
-            print(f"  Bob expected payoff:   {bob_ep:.6f}")
-        else:
-            print("  No strategies found in Nash eq file.")
+def solve_game(args, W, kap, p, base: Path, meta: dict) -> list[Path]:
+    """Build the payoff matrices, eliminate dominated strategies and solve; returns equilibrium files."""
+    c = args.num_plays
+    values = bp.grid(args.n_q, kap)
+    S = bp.feasible_strategies(values, c, kap)
+    print(f"  |S0'| = {len(values)}, feasible c-tuples = {len(S)}")
 
-    # Plot heatmap if requested
-    if plot_heatmap:
-        norm_factor = int(np.floor(np.pi / 4 * np.sqrt(D if scale_with_D else min(D, 2**32))))
-        from visualize_nash_eq import visualize_nash_equilibria_discrete_file
-        visualize_nash_equilibria_discrete_file(
-            nash_fname,
-            normalization_factor=norm_factor,
-            difficulty_label=difficulty_label,
-        )
+    t0 = time.time()
+    A, B = bp.payoff_matrices(S, args.gamma, p)
+    meta['timings']['payoff_s'] = time.time() - t0
+    meta['matrix_stats'] = {'A': _matrix_stats(A), 'B': _matrix_stats(B)}
+    print(f"  Payoff matrices built in {meta['timings']['payoff_s']:.1f}s; "
+          f"A in [{A.min():.6e}, {A.max():.6e}], {meta['matrix_stats']['A']['distinct']} distinct values")
 
-    # Skip simulation if requested
-    if no_simulate:
-        return None
+    t0 = time.time()
+    A, B, rows, cols = bp.eliminate_dominated(A, B)
+    meta['timings']['elimination_s'] = time.time() - t0
+    meta['dimension_after_elimination'] = [len(rows), len(cols)]
+    meta['matrix_stats_reduced'] = {'A': _matrix_stats(A), 'B': _matrix_stats(B)}
+    print(f"  After elimination: {len(rows)} x {len(cols)} ({meta['timings']['elimination_s']:.1f}s)")
 
-    print(f"\n{'='*60}")
-    print("Running Monte Carlo simulation")
-    print(f"{'='*60}")
-    print(f"  Simulations:         {num_simulations:,}")
-    analyzer = NashEquilibriaAnalyzer()
-    nash_eq = analyzer.converge(nash_fname)
-    simulator = QuantumMiningSimulator(
-        nash_eq, num_simulations=num_simulations, difficulty=D, scale_with_D=scale_with_D
-    )
-    _t0 = time.time()
-    stats = simulator.simulate_all(csv_path=csv_path)
-    print(f"  Simulation time:     {time.time() - _t0:.1f}s")
+    print(f"  Lemke-Howson (stop_after={args.stop_after}) started {time.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+    t0 = time.time()
+    equilibria = bp.solve_nash(A, B, args.stop_after)
+    meta['timings']['lemke_howson_s'] = time.time() - t0
+    print(f"  Lemke-Howson found {len(equilibria)} equilibria in {meta['timings']['lemke_howson_s']:.1f}s")
+
+    mixed = []
+    for sa, sb in equilibria:
+        alice = {tuple(int(k) for k in S[rows[i]]): float(w) for i, w in enumerate(sa) if w > 0}
+        bob = {tuple(int(k) for k in S[cols[j]]): float(w) for j, w in enumerate(sb) if w > 0}
+        mixed.append((alice, bob))
+    return write_equilibria(base, mixed, args.stop_after)
+
+
+def analyse_equilibrium(args, W, kap, p, eq_path: Path, label: str, out: Path) -> dict:
+    """Expected payoffs, heatmaps and simulation for one saved equilibrium."""
+    alice, bob = read_equilibrium(eq_path)
+    alice_ep, bob_ep = bp.expected_payoffs(alice, bob, args.gamma, p)
+    info = {
+        'label': label,
+        'file': eq_path.name,
+        'alice_ep': alice_ep,
+        'bob_ep': bob_ep,
+        'symmetric': alice == bob,
+        'alice_support': _describe_mixed(alice, kap),
+        'bob_support': _describe_mixed(bob, kap),
+    }
+    print(f"\n  [{eq_path.name}] Alice U = {alice_ep:.6f}, Bob U = {bob_ep:.6f}, symmetric = {info['symmetric']}")
+
+    tag = f"c{args.num_plays}_{args.regime}" + (f"_{label}" if label else '')
+    if not args.no_plot:
+        from visualize_nash_eq import visualize_equilibrium
+        visualize_equilibrium(eq_path, kap, args.regime + (f"_{label}" if label else ''), out / 'images')
+
+    if args.no_simulate:
+        return info
+    csv_path = out / f"simulation_data_{tag}.csv"
+    if csv_path.exists() and not args.force:
+        print(f"  Resuming: loading simulation data from {csv_path}")
+        df = pd.read_csv(csv_path)
+        if len(df) != args.num_simulations:
+            sys.exit(f"{csv_path} has {len(df)} days, expected {args.num_simulations}; use --force")
+        stats = sim.summarise(df['total_blocks'].to_numpy(), df['total_stale'].to_numpy(),
+                              df['races'].to_numpy(), df['classical_ended_races'].to_numpy())
+    else:
+        print(f"  Simulating {args.num_simulations:,} days (seed {args.seed})", flush=True)
+        t0 = time.time()
+        stats = sim.simulate_days(alice, bob, args.regime, W, args.num_simulations, args.seed,
+                                  processes=args.processes, csv_path=str(csv_path))
+        info['simulation_s'] = time.time() - t0
+        print(f"  Simulation time: {info['simulation_s']:.1f}s")
+    info['stats'] = stats
+    info['csv'] = csv_path.name
     lo3, hi3 = stats['prob_stale_over_third_ci']
     lod, hid = stats['detection_prob_05_ci']
-    print(f"\n{'='*60}")
-    print("Results")
-    print(f"{'='*60}")
-    print(f"  95th percentile:          {stats['p95_stale_rate']:.6f}")
-    print(f"  99th percentile:          {stats['p99_stale_rate']:.6f}")
-    print(f"  Max stale rate:           {stats['max_stale_rate']:.6f}")
-    print(f"  P(stale > 1/3):           {stats['prob_stale_over_third']:.6f}  (95% CI: [{lo3:.6f}, {hi3:.6f}])")
-    print(f"  Detection prob (α=0.05):  {stats['detection_prob_05']:.6f}  (95% CI: [{lod:.6f}, {hid:.6f}])")
-    print(f"  Avg blocks/day:           {stats['avg_blocks']:.6f}")
-    print(f"  Avg forks/day:            {stats['avg_forks']:.6f}")
-    return stats
-
-
-def run_pipeline(D, num_plays, n_q, gamma, clustering_factor, num_simulations, stop_after,
-                 scale_with_D=False, plot_heatmap=False, no_simulate=False):
-    """Run the full pipeline for a single (D, num_plays, n_q) configuration."""
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    os.makedirs(IMAGES_DIR, exist_ok=True)
-    nash_fname = os.path.join(RESULTS_DIR, 'nash_eq.txt')
-
-    # --- Config summary ---
-    print(f"\n{'='*60}")
-    print("Configuration")
-    print(f"{'='*60}")
-    print(f"  D (difficulty):      {D:.6g}  ({'high' if D == D_HIGH else 'low' if D == D_LOW else 'custom'})")
-    print(f"  c (num_plays):       {num_plays}")
-    print(f"  n_q (grid points):   {n_q}")
-    print(f"  gamma:               {gamma}")
-    print(f"  clustering_factor:   {clustering_factor}")
-    print(f"  num_simulations:     {num_simulations:,}")
-    print(f"  scale_with_D:        {scale_with_D}")
-
-    # --- Build payoff matrices ---
-    print(f"\n{'='*60}")
-    print("Building payoff matrices")
-    print(f"{'='*60}")
-    builder = BuildPayoff(
-        n_q, num_plays, D, clustering_factor, gamma,
-        out_fname=nash_fname,
-        scale_with_D=scale_with_D,
-        stop_after=stop_after
-    )
-    A = builder.get_payoff()
-    B = builder.get_payoff(bob=True)
-    A, B = builder.eliminate_dominated(A, B)
-
-    # --- Compute Nash equilibrium ---
-    print("\nComputing Nash equilibrium...")
-    builder.get_nash_eq_pygambit(A, B)
-    print(f"Nash equilibrium written to: {nash_fname}")
-
-    # --- Expected payoffs ---
-    print("\nComputing expected payoffs...")
-    alice_mixed, bob_mixed = parse_nash_eq_from_file(nash_fname)
-    all_iters = [v for strat in list(alice_mixed.keys()) + list(bob_mixed.keys()) for v in strat]
-    if all_iters:
-        max_iters = max(all_iters)
-        ep_builder = BuildPayoff(
-            n_q=max_iters + 1, num_plays=num_plays, D=D,
-            clustering_factor=1.0, gamma=gamma,
-            scale_with_D=False
-        )
-        alice_ep = ep_builder.compute_expected_payoff(alice_mixed, bob_mixed, player="Alice")
-        bob_ep   = ep_builder.compute_expected_payoff(alice_mixed, bob_mixed, player="Bob")
-        print(f"  Alice expected payoff: {alice_ep:.6f}")
-        print(f"  Bob expected payoff:   {bob_ep:.6f}")
-
-    # --- Optional: heatmap ---
-    if plot_heatmap:
-        from visualize_nash_eq import visualize_nash_equilibria_discrete_file
-        visualize_nash_equilibria_discrete_file(nash_fname)
-
-    if no_simulate:
-        print("\nSkipping simulation (--no-simulate).")
-        return None
-
-    # --- Simulate stale rate ---
-    os.makedirs(DATA_DIR, exist_ok=True)
-    difficulty_label = _difficulty_label(D, scale_with_D)
-    csv_path = os.path.join(DATA_DIR, f'simulation_data_c{num_plays}_{difficulty_label}.csv')
-    return run_simulate(nash_fname, num_simulations, D, scale_with_D, csv_path=csv_path)
+    print(f"  P95 {stats['p95_stale_rate']:.6f}  P99 {stats['p99_stale_rate']:.6f}  max {stats['max_stale_rate']:.6f}")
+    print(f"  P(stale > 1/3) {stats['prob_stale_over_third']:.6f} [{lo3:.6f}, {hi3:.6f}]  "
+          f"P_det {stats['detection_prob_05']:.6f} [{lod:.6f}, {hid:.6f}]")
+    print(f"  Avg blocks/day {stats['avg_blocks']:.4f}  avg stale/day {stats['avg_stale']:.4f}  "
+          f"races ended by a classical block {stats['classical_ended_share']:.4f}")
+    return info
 
 
 def main():
     args = parse_args()
-    D = resolve_D(args.D)
-    scale_with_D = args.scale_with_D or (args.D == 'ideal')
-    if args.num_simulations is None:
-        args.num_simulations = 50000 if args.plot_stale_difficulty else 1000000
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    W = bp.W_from_D(args.D)
+    kap = bp.kappa(args.regime, W)
+    p = bp.success_prob(args.regime, W)
+    c = args.num_plays
 
-    if args.plot_stale_difficulty:
-        print(f"\n{'='*60}")
-        print("Stale rate vs difficulty sweep (c=1..4)")
-        print(f"{'='*60}")
-        from simulate_mining import simulate_multiple_strategies
-        simulate_multiple_strategies(
-            num_simulations=args.num_simulations,
-            results_dir=RESULTS_DIR,
-            images_dir=IMAGES_DIR,
-            data_dir=DATA_DIR,
-        )
-    elif args.simulate_from:
-        if not os.path.exists(args.simulate_from):
-            print(f"Error: file not found: {args.simulate_from}")
-            sys.exit(1)
-        print(f"Loading Nash equilibrium from: {args.simulate_from}")
-        os.makedirs(DATA_DIR, exist_ok=True)
-        difficulty_label = _difficulty_label(D, scale_with_D)
-        alice_mixed, _ = parse_nash_eq_from_file(args.simulate_from)
-        num_plays = len(next(iter(alice_mixed.keys()))) if alice_mixed else args.num_plays
-        csv_path = args.csv_path or os.path.join(DATA_DIR, f'simulation_data_c{num_plays}_{difficulty_label}.csv')
-        run_simulate(
-            args.simulate_from,
-            args.num_simulations,
-            D,
-            scale_with_D=scale_with_D,
-            plot_heatmap=args.plot_heatmap,
-            compute_ep=args.compute_ep,
-            gamma=args.gamma,
-            no_simulate=args.no_simulate,
-            csv_path=csv_path,
-        )
+    print(f"\n{'=' * 60}\nConfiguration\n{'=' * 60}")
+    print(f"  regime:          {args.regime}")
+    print(f"  D:               {args.D!r}")
+    print(f"  W:               {W:.6e}")
+    print(f"  kappa:           {kap}")
+    print(f"  c:               {c}")
+    print(f"  n_q:             {args.n_q}")
+    print(f"  gamma:           {args.gamma}")
+    print(f"  stop_after:      {args.stop_after}")
+    print(f"  simulated days:  {args.num_simulations:,}  (seed {args.seed})")
+
+    meta_path = out / f"meta_c{c}_{args.regime}.json"
+    meta = json.loads(meta_path.read_text()) if meta_path.exists() and not args.force else {}
+    meta.update({
+        'regime': args.regime, 'c': c, 'n_q': args.n_q, 'D': args.D, 'W': W, 'kappa': kap,
+        'gamma': args.gamma, 'stop_after': args.stop_after, 'seed': args.seed,
+        'num_simulations': args.num_simulations, 'git_commit': _git_commit(),
+        'command': 'python ' + ' '.join(shlex.quote(a) for a in sys.argv),
+        'grid': [int(k) for k in bp.grid(args.n_q, kap)],
+    })
+    meta.setdefault('timings', {})
+
+    if args.simulate_from:
+        eq_files = [Path(args.simulate_from)]
+        labels = ['']
     else:
-        run_pipeline(
-            D=D,
-            num_plays=args.num_plays,
-            n_q=args.n_q,
-            gamma=args.gamma,
-            clustering_factor=args.clustering_factor,
-            num_simulations=args.num_simulations,
-            stop_after=args.stop_after,
-            scale_with_D=scale_with_D,
-            plot_heatmap=args.plot_heatmap,
-            no_simulate=args.no_simulate,
-        )
+        print(f"\n{'=' * 60}\nGame\n{'=' * 60}")
+        meta['feasible_strategies'] = len(bp.feasible_strategies(bp.grid(args.n_q, kap), c, kap))
+        eq_files = [out / f for f in meta.get('equilibrium_files', [])]
+        if eq_files and all(f.exists() for f in eq_files) and not args.force:
+            print(f"  Resuming: using saved equilibria {[f.name for f in eq_files]}")
+        else:
+            eq_files = solve_game(args, W, kap, p, out / f"nash_eq_c{c}_{args.regime}", meta)
+            meta['equilibrium_files'] = [f.name for f in eq_files]
+            meta_path.write_text(json.dumps(meta, indent=2))
+        labels = [''] if args.stop_after == 1 else [f"eq{n}" for n in range(1, len(eq_files) + 1)]
+
+    print(f"\n{'=' * 60}\nEquilibria\n{'=' * 60}")
+    meta['equilibria'] = [analyse_equilibrium(args, W, kap, p, f, label, out) for f, label in zip(eq_files, labels)]
+    if not args.simulate_from:
+        meta_path.write_text(json.dumps(meta, indent=2))
+        print(f"\nMetadata written to {meta_path}")
 
 
 if __name__ == '__main__':
