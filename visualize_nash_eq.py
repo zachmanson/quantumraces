@@ -45,7 +45,7 @@ def visualize_equilibrium(filename, kappa, label, images_dir="images"):
     """
     alice_data, bob_data = read_equilibrium(filename)
     normalization_factor = kappa
-    difficulty_label = label
+    regime_label = label
     os.makedirs(images_dir, exist_ok=True)
 
     def _plot_histogram_ax(ax, data, normalization_factor, ylabel, panel_label):
@@ -67,7 +67,7 @@ def visualize_equilibrium(filename, kappa, label, images_dir="images"):
         ax.set_xlim(0, 1)
         ax.text(0.5, -0.25, panel_label, fontsize=FONT_PANEL, ha='center', va='top', transform=ax.transAxes)
 
-    def create_discrete_heatmap(player_name, data, label, normalization_factor, difficulty_label):
+    def create_discrete_heatmap(player_name, data, label, normalization_factor, regime_label):
         if not data:
             return
         sorted_tuples = sorted(data.items(), key=lambda x: x[1], reverse=True)
@@ -134,7 +134,7 @@ def visualize_equilibrium(filename, kappa, label, images_dir="images"):
                     fontsize=font_panel, ha='center', va='top')
 
         plt.tight_layout()
-        plt.savefig(os.path.join(images_dir, f'{player_name.lower()}_nash_heatmap_c{max_len}_{difficulty_label}.pdf'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(images_dir, f'{player_name.lower()}_nash_heatmap_c{max_len}_{regime_label}.pdf'), dpi=300, bbox_inches='tight')
         plt.close(fig)
 
     # For c=1, both players share a single side-by-side figure
@@ -155,8 +155,8 @@ def visualize_equilibrium(filename, kappa, label, images_dir="images"):
         _plot_histogram_ax(ax_b, bob_data,   normalization_factor,
                            ylabel=r'$\sigma_{\mathrm{B}}(\bm{k})$', panel_label='(b)')
         plt.tight_layout()
-        plt.savefig(os.path.join(images_dir, f'nash_heatmap_c1_{difficulty_label}.pdf'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(images_dir, f'nash_heatmap_c1_{regime_label}.pdf'), dpi=300, bbox_inches='tight')
         plt.close(fig)
     else:
-        create_discrete_heatmap('Alice', alice_data, '(a)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
-        create_discrete_heatmap('Bob', bob_data, '(b)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
+        create_discrete_heatmap('Alice', alice_data, '(a)', normalization_factor=normalization_factor, regime_label=regime_label)
+        create_discrete_heatmap('Bob', bob_data, '(b)', normalization_factor=normalization_factor, regime_label=regime_label)

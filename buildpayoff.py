@@ -75,28 +75,28 @@ def payoff_matrix(rows: np.ndarray, cols: np.ndarray, gamma: float, p) -> np.nda
     m = cols.shape[0]
     idx = np.arange(m)
 
-    B = np.hstack([np.zeros((m, 1), dtype=np.int64), np.cumsum(cols, axis=1)])   # B_0..B_c per column
+    B_cum = np.hstack([np.zeros((m, 1), dtype=np.int64), np.cumsum(cols, axis=1)])   # B_0..B_c per column
     pb = np.asarray(p(cols)).reshape(m, c)
     FB = np.hstack([np.ones((m, 1)), np.cumprod(1 - pb, axis=1)])                # Bob fails his first n
 
     out = np.empty((rows.shape[0], m), dtype=np.float64)
     for r, a in enumerate(rows):
-        A = np.concatenate([[0], np.cumsum(a)])
+        A_cum = np.concatenate([[0], np.cumsum(a)])
         pa = np.asarray(p(a)).reshape(c)
         FA = np.concatenate([[1.0], np.cumprod(1 - pa)])
         total = np.zeros(m)
         for i in range(1, c + 1):
-            # Alice's i-th measurement; Bob's last measurement strictly before A_i (B is non-decreasing)
-            lB = np.sum(B[:, 1:] < A[i], axis=1)
+            # Alice's i-th measurement; Bob's last measurement strictly before A_i (B_cum is non-decreasing)
+            lB = np.sum(B_cum[:, 1:] < A_cum[i], axis=1)
             base = pa[i - 1] * FA[i - 1] * FB[idx, lB]
             # Bob's AQMS response (or his tied scheduled measurement); impossible once he is exhausted
-            q = np.where(lB < c, p(A[i] - B[idx, lB]), 0.0)
+            q = np.where(lB < c, p(A_cum[i] - B_cum[idx, lB]), 0.0)
             total += base * (1 - q)          # u_meas_i
             total += gamma * base * q        # u_AQMS_i
             # Bob's i-th measurement succeeds first and Alice responds (u_resp_i)
-            lA = np.sum(A[1:, None] < B[:, i], axis=0)
-            responds = (lA < c) & (A[np.minimum(lA + 1, c)] != B[:, i])
-            resp = gamma * pb[:, i - 1] * FB[:, i - 1] * FA[lA] * p(B[:, i] - A[lA])
+            lA = np.sum(A_cum[1:, None] < B_cum[:, i], axis=0)
+            responds = (lA < c) & (A_cum[np.minimum(lA + 1, c)] != B_cum[:, i])
+            resp = gamma * pb[:, i - 1] * FB[:, i - 1] * FA[lA] * p(B_cum[:, i] - A_cum[lA])
             total += np.where(responds, resp, 0.0)
         out[r] = total
     return out

@@ -39,6 +39,16 @@ def test_pipeline_writes_labelled_outputs_for_a_tiny_full_header_run(tmp_path):
     stdout = run_cli("--regime", "full-header", "-c", "2", "--n-q", "4", "--num-simulations", "24",
                      "--processes", "2", "--seed", "1", "--out-dir", str(out), cwd=tmp_path)
     assert "resuming" in stdout.lower()
+    meta = json.loads((out / "meta_c2_full-header.json").read_text())
+    assert meta["equilibria"][0]["simulation_s"] > 0          # timing kept on resume
+    assert len(meta["commands"]) == 2
+
+    # A different configuration in the same directory must not reuse the old outputs.
+    stdout = run_cli("--regime", "full-header", "-c", "2", "--n-q", "5", "--num-simulations", "24",
+                     "--processes", "2", "--seed", "2", "--out-dir", str(out), cwd=tmp_path)
+    assert "resuming" not in stdout.lower()
+    meta = json.loads((out / "meta_c2_full-header.json").read_text())
+    assert meta["n_q"] == 5 and meta["equilibria"][0]["seed"] == 2
 
 
 @pytest.mark.slow

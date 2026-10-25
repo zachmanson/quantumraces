@@ -7,6 +7,12 @@ import buildpayoff as bp
 import reference_model as ref
 
 
+def test_reference_model_self_test_passes():
+    import subprocess, sys
+    out = subprocess.run([sys.executable, ref.__file__], capture_output=True, text=True, timeout=300)
+    assert "all reference tests passed" in out.stdout, out.stdout + out.stderr
+
+
 def test_budgets_and_work_at_2025_difficulty():
     W = bp.W_from_D(bp.D_2025)
     assert bp.kappa("nonce-only", W) == 51471
@@ -51,7 +57,8 @@ def test_matrices_match_reference_on_real_grids(regime, c):
     rng = np.random.default_rng(1000 * c + len(regime))
     kap = bp.kappa(regime, W_2025)
     values = bp.grid(GRID_N_Q[c], kap)
-    S = _random_profiles(rng, values, c, 12)
+    S = np.vstack([_random_profiles(rng, values, c, 12), np.zeros((1, c), dtype=np.int64),
+                   np.array([[0] * (c - 1) + [values[-1]]])])
     p_code = bp.success_prob(regime, W_2025)
     p_ref = ref.p_fn(regime, W_2025)
     for gamma in (0.0, 0.5, 1.0, float(rng.random())):

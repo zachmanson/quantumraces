@@ -176,6 +176,7 @@ def simulate_days(alice_mixed: dict, bob_mixed: dict, regime: str, W: float, num
 
 
 def summarise(blocks, stale, races, classical_ended, csv_path=None) -> dict:
+    """Stale-rate statistics over simulated days (and the raw per-day CSV if csv_path is given)."""
     stale_rates = np.where(blocks > 0, stale / np.maximum(blocks, 1), 0.0)
     # Per-day binomial p-value: P(X >= stale | X ~ Binom(blocks, classical rate))
     p_values = _binom.sf(stale - 1, blocks, CLASSICAL_STALE_RATE)
@@ -208,5 +209,5 @@ def summarise(blocks, stale, races, classical_ended, csv_path=None) -> dict:
         'detection_prob_05_ci': _proportion_ci(detection_prob, n),
         'avg_blocks': float(np.mean(blocks)),
         'avg_stale': float(np.mean(stale)),
-        'classical_ended_share': float(classical_ended.sum() / races.sum()),
+        'classical_ended_share': float(classical_ended.sum() / max(races.sum(), 1)),
     }

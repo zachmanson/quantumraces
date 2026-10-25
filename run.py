@@ -20,7 +20,6 @@ Examples:
 
 import argparse
 import json
-import os
 import shlex
 import subprocess
 import sys
@@ -92,12 +91,11 @@ def _describe_mixed(mixed: dict, kap: int) -> list:
             for s, prob in sorted(mixed.items(), key=lambda x: -x[1])]
 
 
-def solve_game(args, W, kap, p, base: Path, meta: dict) -> list[Path]:
+def solve_game(args, kap, p, grid, base: Path, meta: dict) -> list[Path]:
     """Build the payoff matrices, eliminate dominated strategies and solve; returns equilibrium files."""
     c = args.num_plays
-    values = bp.grid(args.n_q, kap)
-    S = bp.feasible_strategies(values, c, kap)
-    print(f"  |S0'| = {len(values)}, feasible c-tuples = {len(S)}")
+    S = bp.feasible_strategies(grid, c, kap)
+    print(f"  |S0'| = {len(grid)}, feasible c-tuples = {len(S)}")
 
     t0 = time.time()
     A, B = bp.payoff_matrices(S, args.gamma, p)
@@ -127,7 +125,7 @@ def solve_game(args, W, kap, p, base: Path, meta: dict) -> list[Path]:
     return write_equilibria(base, mixed, args.stop_after)
 
 
-def analyse_equilibrium(args, W, kap, p, eq_path: Path, label: str, out: Path) -> dict:
+def analyse_equilibrium(args, W, kap, p, eq_path: Path, label: str, out: Path, previous: dict | None) -> dict:
     """Expected payoffs, heatmaps and simulation for one saved equilibrium."""
     alice, bob = read_equilibrium(eq_path)
     alice_ep, bob_ep = bp.expected_payoffs(alice, bob, args.gamma, p)
@@ -142,21 +140,23 @@ def analyse_equilibrium(args, W, kap, p, eq_path: Path, label: str, out: Path) -
     }
     print(f"\n  [{eq_path.name}] Alice U = {alice_ep:.6f}, Bob U = {bob_ep:.6f}, symmetric = {info['symmetric']}")
 
-    tag = f"c{args.num_plays}_{args.regime}" + (f"_{label}" if label else '')
+    regime_label = args.regime + (f"_{label}" if label else '')
+    tag = f"c{args.num_plays}_{regime_label}"
     if not args.no_plot:
         from visualize_nash_eq import visualize_equilibrium
-        visualize_equilibrium(eq_path, kap, args.regime + (f"_{label}" if label else ''), out / 'images')
+        visualize_equilibrium(eq_path, kap, regime_label, out / 'images')
 
     if args.no_simulate:
         return info
     csv_path = out / f"simulation_data_{tag}.csv"
-    if csv_path.exists() and not args.force:
+    info.update(seed=args.seed, num_days=args.num_simulations)
+    reusable = previous and previous.get('stats') and all(previous.get(k) == info[k] for k in ('file', 'seed', 'num_days'))
+    if csv_path.exists() and reusable and not args.force:
         print(f"  Resuming: loading simulation data from {csv_path}")
         df = pd.read_csv(csv_path)
-        if len(df) != args.num_simulations:
-            sys.exit(f"{csv_path} has {len(df)} days, expected {args.num_simulations}; use --force")
         stats = sim.summarise(df['total_blocks'].to_numpy(), df['total_stale'].to_numpy(),
                               df['races'].to_numpy(), df['classical_ended_races'].to_numpy())
+        info['simulation_s'] = previous.get('simulation_s')
     else:
         print(f"  Simulating {args.num_simulations:,} days (seed {args.seed})", flush=True)
         t0 = time.time()
@@ -196,34 +196,44 @@ def main():
     print(f"  stop_after:      {args.stop_after}")
     print(f"  simulated days:  {args.num_simulations:,}  (seed {args.seed})")
 
+    # Saved outputs are reused only when they were produced by the same game configuration.
+    game_key = {'regime': args.regime, 'c': c, 'n_q': args.n_q, 'D': args.D, 'gamma': args.gamma,
+                'stop_after': args.stop_after}
     meta_path = out / f"meta_c{c}_{args.regime}.json"
     meta = json.loads(meta_path.read_text()) if meta_path.exists() and not args.force else {}
+    if args.simulate_from or meta.get('game_key') != game_key:
+        meta = {}
+    grid = bp.grid(args.n_q, kap)
+    meta.update(game_key)
     meta.update({
-        'regime': args.regime, 'c': c, 'n_q': args.n_q, 'D': args.D, 'W': W, 'kappa': kap,
-        'gamma': args.gamma, 'stop_after': args.stop_after, 'seed': args.seed,
-        'num_simulations': args.num_simulations, 'git_commit': _git_commit(),
-        'command': 'python ' + ' '.join(shlex.quote(a) for a in sys.argv),
-        'grid': [int(k) for k in bp.grid(args.n_q, kap)],
+        'game_key': game_key, 'W': W, 'kappa': kap, 'seed': args.seed,
+        'num_simulations': args.num_simulations, 'grid': [int(k) for k in grid],
     })
     meta.setdefault('timings', {})
+    meta.setdefault('commands', []).append({
+        'command': 'python ' + ' '.join(shlex.quote(a) for a in sys.argv), 'git_commit': _git_commit(),
+        'started': time.strftime('%Y-%m-%d %H:%M:%S'),
+    })
 
     if args.simulate_from:
         eq_files = [Path(args.simulate_from)]
         labels = ['']
     else:
         print(f"\n{'=' * 60}\nGame\n{'=' * 60}")
-        meta['feasible_strategies'] = len(bp.feasible_strategies(bp.grid(args.n_q, kap), c, kap))
+        meta['feasible_strategies'] = len(bp.feasible_strategies(grid, c, kap))
         eq_files = [out / f for f in meta.get('equilibrium_files', [])]
         if eq_files and all(f.exists() for f in eq_files) and not args.force:
             print(f"  Resuming: using saved equilibria {[f.name for f in eq_files]}")
         else:
-            eq_files = solve_game(args, W, kap, p, out / f"nash_eq_c{c}_{args.regime}", meta)
+            eq_files = solve_game(args, kap, p, grid, out / f"nash_eq_c{c}_{args.regime}", meta)
             meta['equilibrium_files'] = [f.name for f in eq_files]
             meta_path.write_text(json.dumps(meta, indent=2))
         labels = [''] if args.stop_after == 1 else [f"eq{n}" for n in range(1, len(eq_files) + 1)]
 
     print(f"\n{'=' * 60}\nEquilibria\n{'=' * 60}")
-    meta['equilibria'] = [analyse_equilibrium(args, W, kap, p, f, label, out) for f, label in zip(eq_files, labels)]
+    previous = {e['label']: e for e in meta.get('equilibria', [])}
+    meta['equilibria'] = [analyse_equilibrium(args, W, kap, p, f, label, out, previous.get(label))
+                          for f, label in zip(eq_files, labels)]
     if not args.simulate_from:
         meta_path.write_text(json.dumps(meta, indent=2))
         print(f"\nMetadata written to {meta_path}")
