@@ -123,3 +123,11 @@ def test_full_matrices_are_bounded_and_symmetric(setting, c):
     np.testing.assert_array_equal(B, A.T)
     A2, B2 = bp.payoff_matrices(S, 0.2, p)
     assert (A2 + B2).max() <= 1 + 1e-12
+
+
+@pytest.mark.parametrize("regime", bp.REGIMES)
+def test_feasible_strategy_counts_for_the_v2_runs(regime):
+    # Counts from the 2026-10-25 audit (section B.12), identical in both regimes.
+    kap = bp.kappa(regime, W_2025)
+    for c, expected in {1: 201, 2: 484, 3: 1936, 4: 3094}.items():
+        assert len(bp.feasible_strategies(bp.grid(GRID_N_Q[c], kap), c, kap)) == expected

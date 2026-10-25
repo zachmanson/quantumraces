@@ -102,6 +102,63 @@ def payoff_matrix(rows: np.ndarray, cols: np.ndarray, gamma: float, p) -> np.nda
     return out
 
 
+def feasible_strategies(values: np.ndarray, c: int, kap: int) -> np.ndarray:
+    """All c-tuples drawn from the sampled counts whose total is at most kappa."""
+    S = np.array(np.meshgrid(*([np.asarray(values, dtype=np.int64)] * c), indexing="ij")).reshape(c, -1).T
+    return S[S.sum(axis=1) <= kap]
+
+
+def _dominated_rows(M: np.ndarray) -> np.ndarray:
+    """dominated[i] is True if some row strictly beats row i in every column."""
+    return np.array([np.any(np.all(M > M[i], axis=1)) for i in range(M.shape[0])], dtype=bool)
+
+
+def eliminate_dominated(A: np.ndarray, B: np.ndarray):
+    """Iteratively eliminate strictly dominated pure strategies for both players.
+
+    Returns the reduced A, B and the surviving row (Alice) and column (Bob) indices into the inputs.
+    """
+    rows = np.arange(A.shape[0])
+    cols = np.arange(A.shape[1])
+    changed = True
+    while changed:
+        changed = False
+        keep = ~_dominated_rows(A)
+        if not keep.all():
+            A, B, rows = A[keep], B[keep], rows[keep]
+            changed = True
+        keep = ~_dominated_rows(B.T)
+        if not keep.all():
+            A, B, cols = A[:, keep], B[:, keep], cols[keep]
+            changed = True
+    return A, B, rows, cols
+
+
+def solve_nash(A: np.ndarray, B: np.ndarray, stop_after: int = 1) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Lemke-Howson via Gambit (rational arithmetic). Returns [(sigma_A, sigma_B), ...]."""
+    import pygambit
+
+    game = pygambit.Game.from_arrays(A, B)
+    game.players[0].label = "Alice"
+    game.players[1].label = "Bob"
+    result = pygambit.nash.lcp_solve(game, rational=True, stop_after=stop_after)
+    return [
+        tuple(np.array([float(eq[s]) for s in player.strategies]) for player in game.players)
+        for eq in result.equilibria
+    ]
+
+
+def expected_payoffs(alice_mixed: dict, bob_mixed: dict, gamma: float, p) -> tuple[float, float]:
+    """(U_A, U_B) = sigma_A^T A sigma_B and sigma_A^T B sigma_B, evaluated on the supports' iteration counts."""
+    Sa = np.array(list(alice_mixed.keys()), dtype=np.int64)
+    Sb = np.array(list(bob_mixed.keys()), dtype=np.int64)
+    sa = np.array(list(alice_mixed.values()))
+    sb = np.array(list(bob_mixed.values()))
+    alice_ep = sa @ payoff_matrix(Sa, Sb, gamma, p) @ sb
+    bob_ep = sb @ payoff_matrix(Sb, Sa, 1 - gamma, p) @ sa
+    return float(alice_ep), float(bob_ep)
+
+
 def payoff_matrices(S: np.ndarray, gamma: float, p) -> tuple[np.ndarray, np.ndarray]:
     """Alice's matrix A and Bob's matrix B over the strategy set S (rows: Alice, columns: Bob).
 
