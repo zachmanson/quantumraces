@@ -2,6 +2,7 @@
 
 Time runs on an integer clock counted in Grover iterations; one iteration takes 600/kappa seconds.
 """
+import functools
 import itertools
 import math
 import os
@@ -141,12 +142,11 @@ def _init_worker(args):
 
 
 def _cached(p):
-    cache = {}
-
+    # Bounded: AQMS response counts are nearly all distinct (especially in full-header), so an
+    # unbounded cache grows by millions of entries per worker over a run.
+    @functools.lru_cache(maxsize=4096)
     def cached_p(k):
-        if k not in cache:
-            cache[k] = float(p(k))
-        return cache[k]
+        return float(p(k))
     return cached_p
 
 
