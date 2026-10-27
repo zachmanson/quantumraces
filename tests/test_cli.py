@@ -29,6 +29,12 @@ def test_pipeline_writes_labelled_outputs_for_a_tiny_full_header_run(tmp_path):
     eq = meta["equilibria"][0]
     assert 0 <= eq["alice_ep"] <= 1 and 0 <= eq["bob_ep"] <= 1
     assert eq["stats"]["num_days"] == 24
+    for player in ("alice", "bob"):
+        support = eq[f"{player}_support"]
+        mean = [sum(s["probability"] * s["fraction_of_kappa"][i] for s in support) for i in range(2)]
+        first = sum(s["probability"] * next((f for f in s["fraction_of_kappa"] if f > 0), 0) for s in support)
+        assert eq[f"{player}_schedule"] == pytest.approx(mean)
+        assert eq[f"{player}_first_measurement"] == pytest.approx(first)
 
     assert (out / "nash_eq_c2_full-header.txt").exists()
     assert len(pd.read_csv(out / "simulation_data_c2_full-header.csv")) == 24
@@ -63,3 +69,61 @@ def test_stop_after_two_labels_every_output_per_equilibrium(tmp_path):
         assert (out / f"nash_eq_c1_nonce-only_eq{n}.txt").exists()
         assert (out / f"simulation_data_c1_nonce-only_eq{n}.csv").exists()
         assert (out / "images" / f"nash_heatmap_c1_nonce-only_eq{n}.pdf").exists()
+
+
+@pytest.mark.slow
+def test_control_simulates_days_without_quantum_miners(tmp_path):
+    out = tmp_path / "out"
+    run_cli("--regime", "full-header", "--control", "--num-simulations", "24", "--processes", "2",
+            "--seed", "1", "--out-dir", str(out), cwd=tmp_path)
+    meta = json.loads((out / "meta_control.json").read_text())
+    assert meta["regime"] == "full-header" and meta["seed"] == 1
+    stats = meta["stats"]
+    assert stats["num_days"] == 24
+    assert stats["classical_ended_share"] == 1.0          # with no quantum miners every race ends classically
+    assert len(pd.read_csv(out / "simulation_data_control.csv")) == 24
+    assert not list(out.glob("nash_eq_*"))
+
+
+@pytest.mark.slow
+@pytest.mark.audit
+def test_default_gamma_reproduces_the_audit_first_finder_row(tmp_path):
+    # Independent audit (2026-10-26) first-finder row, retargeted to n_q = 30 (exact LH, about a minute):
+    # full-header, c = 1, gamma_S = 0.6: support size 13, U = 0.4727, E[first measurement] = 0.6875 kappa.
+    out = tmp_path / "out"
+    run_cli("--regime", "full-header", "-c", "1", "--n-q", "30", "--no-simulate", "--no-plot",
+            "--out-dir", str(out), cwd=tmp_path)
+    meta = json.loads((out / "meta_c1_full-header.json").read_text())
+    assert meta["gamma"] == 0.6
+    eq = meta["equilibria"][0]
+    assert len(eq["alice_support"]) == 13
+    assert eq["alice_ep"] == pytest.approx(0.4727, abs=5e-5)
+    assert eq["alice_first_measurement"] == pytest.approx(0.6875, abs=5e-4)
+
+
+SWEEP_COLUMNS = {"c", "gamma", "n_q", "num_days", "mean_stale_rate", "std_stale_rate", "p95_stale_rate",
+                 "p99_stale_rate", "max_stale_rate", "prob_stale_over_third", "prob_stale_over_third_ci_lower",
+                 "prob_stale_over_third_ci_upper", "detection_prob_05", "detection_prob_05_ci_lower",
+                 "detection_prob_05_ci_upper", "avg_blocks", "avg_stale", "classical_ended_share", "alice_ep",
+                 "alice_first_measurement"}
+
+
+@pytest.mark.slow
+def test_gamma_sweep_collects_one_row_per_c_and_gamma_with_plots(tmp_path):
+    sweep = tmp_path / "sweep"
+    for gamma in ("1.0", "0.5"):
+        run_cli("--regime", "full-header", "-c", "1", "--n-q", "4", "--gamma", gamma, "--num-simulations", "24",
+                "--processes", "2", "--seed", "1", "--no-plot", "--out-dir", str(sweep / f"g{gamma}"), cwd=tmp_path)
+    result = subprocess.run([sys.executable, str(REPO / "sweep_gamma.py"), str(sweep)], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=600)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    df = pd.read_csv(sweep / "stale_rate_vs_gamma.csv")
+    assert SWEEP_COLUMNS <= set(df.columns)
+    assert df["gamma"].tolist() == [0.5, 1.0] and df["c"].tolist() == [1, 1]
+    half = df.iloc[0]
+    assert half["alice_ep"] == pytest.approx(0.5)              # gamma_S = 1/2: all-in at kappa, payoff 1/2
+    assert half["alice_first_measurement"] == pytest.approx(1.0)
+    assert (df["num_days"] == 24).all()
+    for name in ("p95_stale_rate", "detection_prob_05", "mean_stale_rate", "alice_first_measurement"):
+        assert (sweep / "images" / f"{name}_vs_gamma.pdf").exists()

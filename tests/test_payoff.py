@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -61,13 +62,13 @@ def test_matrices_match_reference_on_real_grids(regime, c):
                    np.array([[0] * (c - 1) + [values[-1]]])])
     p_code = bp.success_prob(regime, W_2025)
     p_ref = ref.p_fn(regime, W_2025)
-    for gamma in (0.0, 0.5, 1.0, float(rng.random())):
+    for gamma in (0.0, 0.5, 0.6, 1.0, float(rng.random())):
         A, B = bp.payoff_matrices(S, gamma, p_code)
         for r, a in enumerate(S):
             for col, b in enumerate(S):
                 a_l, b_l = [int(x) for x in a], [int(x) for x in b]
                 assert A[r, col] == pytest.approx(ref.alice_payoff(a_l, b_l, gamma, p_ref), rel=1e-12, abs=1e-300)
-                assert B[r, col] == pytest.approx(ref.alice_payoff(b_l, a_l, 1 - gamma, p_ref), rel=1e-12, abs=1e-300)
+                assert B[r, col] == pytest.approx(ref.bob_payoff(a_l, b_l, gamma, p_ref), rel=1e-12, abs=1e-300)
 
 
 TOY_W = 3000.0
@@ -103,11 +104,50 @@ def test_matrix_entries_match_brute_force_with_toy_p():
 def test_c1_closed_forms(a, b):
     g = 0.3
     pa, pb = p_toy_scalar(a), p_toy_scalar(b)
-    if a <= b:
+    if a < b:
         expected = pa * (1 - pa) + g * pa * pa
+    elif a == b:
+        expected = pa * (1 - pa) + 0.5 * pa * pa
     else:
-        expected = pa * (1 - pb) + g * pb * pb
+        expected = pa * (1 - pb) + (1 - g) * pb * pb
     assert bp.payoff_matrix([[a]], [[b]], g, p_toy)[0, 0] == pytest.approx(expected, rel=1e-13)
+
+
+@pytest.mark.parametrize("g", [0.3, 0.6, 1.0])
+def test_reference_c1_closed_forms_follow_first_finder_rule(g):
+    # gamma is the probability the first-broadcast block wins; a same-tick tie is a coin flip.
+    pa, pb = p_toy_scalar(10), p_toy_scalar(20)
+    assert ref.alice_payoff([10], [20], g, p_toy_scalar) == pytest.approx(pa * (1 - pa) + g * pa * pa, rel=1e-13)
+    assert ref.alice_payoff([20], [10], g, p_toy_scalar) == pytest.approx(pb * (1 - pa) + (1 - g) * pa * pa, rel=1e-13)
+    assert ref.alice_payoff([10], [10], g, p_toy_scalar) == pytest.approx(pa * (1 - pa) + 0.5 * pa * pa, rel=1e-13)
+    # Bob's payoff is the same function with the roles swapped.
+    assert ref.bob_payoff([20], [10], g, p_toy_scalar) == ref.alice_payoff([10], [20], g, p_toy_scalar)
+
+
+def test_reference_c1_at_gamma_one_the_first_finder_always_wins():
+    # LRS19's PQMS payoff at c = 1. At gamma = 1 the first finder always keeps the fork, so Alice wins iff she finds first:
+    # a < b gives p(a), and a > b gives p(a)(1 - p(b)) (a successful response is worthless).
+    pa, pb = p_toy_scalar(10), p_toy_scalar(20)
+    assert ref.alice_payoff([10], [20], 1.0, p_toy_scalar) == pytest.approx(pa, rel=1e-13)
+    assert ref.alice_payoff([20], [10], 1.0, p_toy_scalar) == pytest.approx(pb * (1 - pa), rel=1e-13)
+
+
+@pytest.mark.parametrize("g", [0.6, 1.0])
+def test_reference_closed_form_matches_brute_force_and_piecewise(g):
+    rng = np.random.default_rng(11)
+    values = [0, 5, 10, 15, 20, 30]
+    checked = 0
+    for _ in range(400):
+        c = int(rng.integers(1, 4))
+        a = [int(rng.choice(values)) for _ in range(c)]
+        b = [int(rng.choice(values)) for _ in range(c)]
+        if ref.multi_tie(a, b):
+            continue
+        u = ref.alice_payoff(a, b, g, p_toy_scalar)
+        assert u == pytest.approx(ref.brute_force(a, b, g, p_toy_scalar), rel=1e-12, abs=1e-15)
+        assert u == pytest.approx(ref.alice_payoff_piecewise(a, b, g, p_toy_scalar), rel=1e-12, abs=1e-15)
+        checked += 1
+    assert checked > 300
 
 
 def _full_grid_strategies(n_q, c, kap):
@@ -124,12 +164,29 @@ def test_full_matrices_are_bounded_and_symmetric(setting, c):
     else:
         kap, p = bp.kappa(setting, W_2025), bp.success_prob(setting, W_2025)
     S = _full_grid_strategies(6, c, kap)
+    for gamma in (0.5, 0.6, 0.2, 1.0):
+        A, B = bp.payoff_matrices(S, gamma, p)
+        assert A.min() >= 0 and B.min() >= 0
+        assert (A + B).max() <= 1 + 1e-12
+        np.testing.assert_array_equal(B, A.T)
+
+
+# S, A, B from payoff_matrices(S, 0.5, p) at commit cff0e2f (owner rule), with S = _full_grid_strategies(6, c, kap)
+# for c = 1..3: toy (kap = 30, p_toy) and both regimes at W_2025. Keys "<setting>_c<c>_<S|A|B>".
+GAMMA_HALF_FIXTURE = Path(__file__).parent / "fixtures" / "payoff_matrices_gamma_half_cff0e2f.npz"
+
+
+@pytest.mark.parametrize("c", [1, 2, 3])
+@pytest.mark.parametrize("setting", ["nonce-only", "full-header", "toy"])
+def test_matrices_at_gamma_half_are_unchanged_from_the_owner_rule(setting, c):
+    # At gamma = 1/2 the first-finder rule equals the old owner rule (gamma attached to Alice), so the
+    # matrices must equal those written by commit cff0e2f bit for bit.
+    p = p_toy if setting == "toy" else bp.success_prob(setting, W_2025)
+    with np.load(GAMMA_HALF_FIXTURE) as old:
+        S, A_old, B_old = (old[f"{setting}_c{c}_{k}"] for k in "SAB")
     A, B = bp.payoff_matrices(S, 0.5, p)
-    assert A.min() >= 0 and B.min() >= 0
-    assert (A + B).max() <= 1 + 1e-12
-    np.testing.assert_array_equal(B, A.T)
-    A2, B2 = bp.payoff_matrices(S, 0.2, p)
-    assert (A2 + B2).max() <= 1 + 1e-12
+    np.testing.assert_array_equal(A, A_old)
+    np.testing.assert_array_equal(B, B_old)
 
 
 @pytest.mark.parametrize("regime", bp.REGIMES)

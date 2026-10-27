@@ -42,6 +42,15 @@ def test_expected_payoff_of_pure_c1_profile():
     assert bob_ep == pytest.approx(pb * (1 - pa) + (1 - g) * pa * pa, rel=1e-13)
 
 
+def test_expected_payoff_gives_gamma_to_bob_when_he_finds_first():
+    # Bob measures first at 10; if Alice's response at 20 also succeeds, Bob's block wins w.p. gamma.
+    g = 0.6
+    pa, pb = p_toy_scalar(20), p_toy_scalar(10)
+    alice_ep, bob_ep = bp.expected_payoffs({(20,): 1.0}, {(10,): 1.0}, g, p_toy)
+    assert alice_ep == pytest.approx(pa * (1 - pb) + (1 - g) * pb * pb, rel=1e-13)
+    assert bob_ep == pytest.approx(pb * (1 - pb) + g * pb * pb, rel=1e-13)
+
+
 def test_expected_payoff_equals_sigma_A_sigma_on_the_matrices():
     S = np.array([[0, 30], [10, 10], [25, 5]])
     sa = np.array([0.2, 0.5, 0.3])
@@ -62,3 +71,12 @@ def test_solver_finds_the_mixed_equilibrium_of_matching_pennies():
     sa, sb = eqs[0]
     np.testing.assert_allclose(sa, [0.5, 0.5])
     np.testing.assert_allclose(sb, [0.5, 0.5])
+
+
+def test_measurement_schedule_averages_iterations_and_skips_leading_zeros_for_the_first_measurement():
+    # kappa = 100. Mean schedule: (0.5*0 + 0.25*20 + 0.25*40, 0.5*50 + 0.25*30 + 0.25*0) / 100.
+    # First measurement at a non-zero count: 50, 20, 40 -> 0.5*50 + 0.25*20 + 0.25*40 = 40.
+    mixed = {(0, 50): 0.5, (20, 30): 0.25, (40, 0): 0.25}
+    schedule, first = bp.measurement_schedule(mixed, 100)
+    assert schedule == pytest.approx([0.15, 0.325])
+    assert first == pytest.approx(0.40)

@@ -1,6 +1,7 @@
 import numpy as np
 
 import buildpayoff as bp
+from test_payoff import _full_grid_strategies, p_toy
 
 
 def test_rows_and_columns_survive_independently():
@@ -32,3 +33,12 @@ def test_weakly_dominated_strategies_are_kept():
     _, _, rows, cols = bp.eliminate_dominated(A, B)
     assert list(rows) == [0, 1]
     assert list(cols) == [0, 1]
+
+
+def test_symmetric_game_keeps_the_same_strategies_for_both_players():
+    # Under the first-finder rule B == A.T for every gamma, so Alice and Bob must keep the same strategies.
+    S = _full_grid_strategies(6, 2, 30)
+    A, B = bp.payoff_matrices(S, 0.6, p_toy)
+    _, _, rows, cols = bp.eliminate_dominated(A, B)
+    assert len(rows) < len(S)
+    assert list(rows) == list(cols)

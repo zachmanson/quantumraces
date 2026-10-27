@@ -39,7 +39,7 @@ python run.py --regime {nonce-only,full-header} [options]
 | `--D` | `119116256505723.5` | Network difficulty (blockchain.com units) |
 | `-c`, `--num-plays` | `3` | Number of measurements per race |
 | `--n-q` | `35` | Grid resolution: S0′ has up to n_q + 1 iteration counts |
-| `--gamma` | `0.5` | Sattath's propagation parameter γ_S |
+| `--gamma` | `0.6` | γ_S: probability the first-broadcast block wins an AQMS fork (a same-tick tie is ½ each) |
 | `--stop-after` | `1` | Number of Nash equilibria to compute; with more than 1, every output is labelled `eqN` |
 | `--num-simulations` | `1,000,000` | Number of simulated days |
 | `--seed` | `20261025` | Master seed for the simulation |
@@ -48,6 +48,7 @@ python run.py --regime {nonce-only,full-header} [options]
 | `--no-simulate`, `--no-plot` | off | Skip the simulation or the heatmaps |
 | `--force` | off | Recompute outputs that already exist (runs are otherwise resumable) |
 | `--simulate-from FILE` | | Skip the game and analyse a saved equilibrium file |
+| `--control` | off | Skip the game and simulate days with no quantum miners (classical baseline); writes `meta_control.json` |
 
 ### Common usages
 
@@ -60,20 +61,29 @@ python run.py --regime nonce-only -c 3 --n-q 35 --stop-after 2
 
 # Simulate from a saved equilibrium
 python run.py --regime nonce-only --simulate-from results_v2/nash_eq_c1_nonce-only.txt
+
+# No-quantum-miner control
+python run.py --regime full-header --control
+
+# Collect a gamma_S sweep (one run.py --out-dir per gamma_S point) into a CSV and plots
+python sweep_gamma.py results_v2_g06/sweep
 ```
+
+The whole gamma_S = 0.6 batch (headline runs, sweep, control) is `python results_v2_g06/run_all.py` (`--smoke` for a tiny dry run).
 
 ### Tests
 
 ```bash
-python -m pytest              # everything (the Monte Carlo consistency checks take a few minutes)
+python -m pytest              # everything except the audit reproduction (the Monte Carlo checks take a few minutes)
 python -m pytest -m "not slow"
+python -m pytest -m audit     # reproduce the audit's c = 1 first-finder row with an exact solve (about a minute)
 python tests/reference_model.py
 ```
 
 ## Outputs (in `--out-dir`)
 
 - `nash_eq_c{c}_{regime}.txt` (or `..._eq{N}.txt`): Nash equilibrium supports, one line per pure strategy in Grover iterations
-- `meta_c{c}_{regime}.json`: configuration, κ, grid, matrix sizes and statistics, timings, expected payoffs and simulation statistics
+- `meta_c{c}_{regime}.json`: configuration, κ, grid, matrix sizes and statistics, timings, expected payoffs, mean measurement schedule E[k_1..k_c]/κ and E[first measurement]/κ (first non-zero count), and simulation statistics
 - `simulation_data_c{c}_{regime}[_eq{N}].csv`: per-day blocks, stale blocks, races, races ended by a classical block, and binomial p-value
 - `images/`: Nash equilibrium heatmaps (c ≥ 2) and the c = 1 histogram
 

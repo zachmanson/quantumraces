@@ -16,6 +16,7 @@ Examples:
   python run.py --regime full-header -c 2 --n-q 45
   python run.py --regime nonce-only -c 3 --n-q 35 --stop-after 2
   python run.py --regime nonce-only --simulate-from results_v2/nash_eq_c1_nonce-only.txt
+  python run.py --regime full-header --control
 """
 
 import argparse
@@ -50,8 +51,8 @@ def parse_args():
                         help='Number of measurements per race, c (default: 3)')
     parser.add_argument('--n-q', type=int, default=35, dest='n_q',
                         help='Grid resolution: S0\' has up to n_q + 1 iteration counts (default: 35)')
-    parser.add_argument('--gamma', type=float, default=0.5,
-                        help='Sattath\'s propagation parameter gamma_S (default: 0.5)')
+    parser.add_argument('--gamma', type=float, default=0.6,
+                        help='gamma_S: probability the first-broadcast block wins an AQMS fork (default: 0.6)')
     parser.add_argument('--stop-after', type=int, default=1,
                         help='Number of Nash equilibria to compute (default: 1)')
     parser.add_argument('--num-simulations', type=int, default=1_000_000,
@@ -68,6 +69,8 @@ def parse_args():
                         help='Skip the heatmaps')
     parser.add_argument('--force', action='store_true',
                         help='Recompute outputs that already exist')
+    parser.add_argument('--control', action='store_true',
+                        help='No-quantum-miner control: skip the game and simulate days with the classical network only')
     parser.add_argument('--simulate-from', metavar='FILE',
                         help='Skip the game; load one equilibrium from FILE, then compute payoffs, plots, simulation')
     return parser.parse_args()
@@ -79,6 +82,11 @@ def _git_commit() -> str:
                               cwd=Path(__file__).resolve().parent).stdout.strip()
     except OSError:
         return 'unknown'
+
+
+def _command_record() -> dict:
+    return {'command': 'python ' + ' '.join(shlex.quote(a) for a in sys.argv), 'git_commit': _git_commit(),
+            'started': time.strftime('%Y-%m-%d %H:%M:%S')}
 
 
 def _matrix_stats(M: np.ndarray) -> dict:
@@ -108,6 +116,7 @@ def solve_game(args, kap, p, grid, base: Path, meta: dict) -> list[Path]:
     A, B, rows, cols = bp.eliminate_dominated(A, B)
     meta['timings']['elimination_s'] = time.time() - t0
     meta['dimension_after_elimination'] = [len(rows), len(cols)]
+    assert np.array_equal(rows, cols), "symmetric game (B == A.T) must keep the same strategies for both players"
     meta['matrix_stats_reduced'] = {'A': _matrix_stats(A), 'B': _matrix_stats(B)}
     print(f"  After elimination: {len(rows)} x {len(cols)} ({meta['timings']['elimination_s']:.1f}s)")
 
@@ -138,7 +147,11 @@ def analyse_equilibrium(args, W, kap, p, eq_path: Path, label: str, out: Path, p
         'alice_support': _describe_mixed(alice, kap),
         'bob_support': _describe_mixed(bob, kap),
     }
+    for player, mixed in (('alice', alice), ('bob', bob)):
+        info[f'{player}_schedule'], info[f'{player}_first_measurement'] = bp.measurement_schedule(mixed, kap)
     print(f"\n  [{eq_path.name}] Alice U = {alice_ep:.6f}, Bob U = {bob_ep:.6f}, symmetric = {info['symmetric']}")
+    print(f"  E[first measurement]/kappa: Alice {info['alice_first_measurement']:.4f}, "
+          f"Bob {info['bob_first_measurement']:.4f}")
 
     regime_label = args.regime + (f"_{label}" if label else '')
     tag = f"c{args.num_plays}_{regime_label}"
@@ -176,6 +189,26 @@ def analyse_equilibrium(args, W, kap, p, eq_path: Path, label: str, out: Path, p
     return info
 
 
+def run_control(args, W, out: Path) -> None:
+    """Simulate days with no quantum miners: the classical baseline for p_stale and P_det."""
+    no_quantum = {(): 1.0}
+    meta = {
+        'regime': args.regime, 'D': args.D, 'W': W, 'seed': args.seed, 'num_simulations': args.num_simulations,
+        **_command_record(),
+    }
+    print(f"\n  Control: simulating {args.num_simulations:,} days without quantum miners (seed {args.seed})", flush=True)
+    t0 = time.time()
+    meta['stats'] = sim.simulate_days(no_quantum, no_quantum, args.regime, W, args.num_simulations, args.seed,
+                                      processes=args.processes, csv_path=str(out / 'simulation_data_control.csv'))
+    meta['simulation_s'] = time.time() - t0
+    s = meta['stats']
+    print(f"  mean p_stale {s['mean_stale_rate']:.6f}  P_det {s['detection_prob_05']:.6f} "
+          f"[{s['detection_prob_05_ci'][0]:.6f}, {s['detection_prob_05_ci'][1]:.6f}]")
+    meta_path = out / 'meta_control.json'
+    meta_path.write_text(json.dumps(meta, indent=2))
+    print(f"\nMetadata written to {meta_path}")
+
+
 def main():
     args = parse_args()
     out = Path(args.out_dir)
@@ -195,6 +228,9 @@ def main():
     print(f"  gamma:           {args.gamma}")
     print(f"  stop_after:      {args.stop_after}")
     print(f"  simulated days:  {args.num_simulations:,}  (seed {args.seed})")
+    if args.control:
+        run_control(args, W, out)
+        return
 
     # Saved outputs are reused only when they were produced by the same game configuration.
     game_key = {'regime': args.regime, 'c': c, 'n_q': args.n_q, 'D': args.D, 'gamma': args.gamma,
@@ -210,10 +246,7 @@ def main():
         'num_simulations': args.num_simulations, 'grid': [int(k) for k in grid],
     })
     meta.setdefault('timings', {})
-    meta.setdefault('commands', []).append({
-        'command': 'python ' + ' '.join(shlex.quote(a) for a in sys.argv), 'git_commit': _git_commit(),
-        'started': time.strftime('%Y-%m-%d %H:%M:%S'),
-    })
+    meta.setdefault('commands', []).append(_command_record())
 
     if args.simulate_from:
         eq_files = [Path(args.simulate_from)]

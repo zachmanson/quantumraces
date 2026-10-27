@@ -1,3 +1,4 @@
+import itertools
 from collections import Counter
 
 import numpy as np
@@ -82,24 +83,32 @@ N_RACES = 1_000_000
 @pytest.mark.slow
 @pytest.mark.parametrize("a,b", CONSISTENCY_PROFILES)
 def test_race_frequencies_match_payoff_entries(a, b):
+    # Classify each simulated race, score it with the first-finder rule (fork: gamma to the first finder,
+    # 1 - gamma to the responder, 1/2 each at a same-tick tie) and compare mean payoffs with the matrices.
     assert not ref.multi_tie(list(a), list(b))
     rng = np.random.default_rng(abs(hash((a, b))) % 2**32)
+    both_scheduled = set(itertools.accumulate(a)) & set(itertools.accumulate(b))
     counts = Counter()
     for _ in range(N_RACES):
-        f = set(sm.simulate_race(a, b, 0, None, p_toy_scalar, rng, baseline_stale=0.0).finders)
-        counts["fork" if f == {"Alice", "Bob"} else "alice" if f == {"Alice"} else "bob" if f == {"Bob"} else "none"] += 1
+        out = sm.simulate_race(a, b, 0, None, p_toy_scalar, rng, baseline_stale=0.0)
+        f = out.finders
+        if set(f) == {"Alice", "Bob"}:
+            counts["tie" if out.end_tick in both_scheduled else f"{f[0].lower()}_first_fork"] += 1
+        else:
+            counts[f[0].lower() if f else "none"] += 1
 
-    alice0 = bp.payoff_matrix([a], [b], 0.0, p_toy)[0, 0]
-    alice1 = bp.payoff_matrix([a], [b], 1.0, p_toy)[0, 0]
-    bob0 = bp.payoff_matrix([b], [a], 0.0, p_toy)[0, 0]
     report = {}
-    for key, expected in (("alice", alice0), ("bob", bob0), ("fork", alice1 - alice0)):
-        freq = counts[key] / N_RACES
-        se = max(np.sqrt(expected * (1 - expected) / N_RACES), 1 / N_RACES)
-        report[key] = (freq, expected, (freq - expected) / se)
-    print(f"\n{a} vs {b}: " + ", ".join(f"{k}: freq={f:.5f} model={e:.5f} z={z:+.2f}" for k, (f, e, z) in report.items()))
-    for key, (freq, expected, z) in report.items():
-        assert abs(z) < 4, f"{key}: freq {freq} vs model {expected} (z = {z:.2f})"
+    for g in (0.0, 0.6, 1.0):
+        for mine, theirs, model in (("alice", "bob", bp.payoff_matrix([a], [b], g, p_toy)[0, 0]),
+                                    ("bob", "alice", bp.payoff_matrix([b], [a], g, p_toy)[0, 0])):
+            shares = {mine: 1.0, f"{mine}_first_fork": g, f"{theirs}_first_fork": 1 - g, "tie": 0.5}
+            mean = sum(counts[k] * x for k, x in shares.items()) / N_RACES
+            var = sum(counts[k] * x * x for k, x in shares.items()) / N_RACES - mean**2
+            z = (mean - model) / max(np.sqrt(var / N_RACES), 1 / N_RACES)
+            report[f"{mine}@{g}"] = (mean, model, z)
+    print(f"\n{a} vs {b}: " + ", ".join(f"{k}: sim={m:.5f} model={e:.5f} z={z:+.2f}" for k, (m, e, z) in report.items()))
+    for key, (mean, model, z) in report.items():
+        assert abs(z) < 4, f"{key}: simulated {mean} vs model {model} (z = {z:.2f})"
 
 
 # ---------------------------------------------------------------- simulated days

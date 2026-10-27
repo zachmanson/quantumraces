@@ -14,7 +14,9 @@ Contents
 Conventions
   a = (a_1..a_c), b = (b_1..b_c): Grover iterations Alice/Bob perform before each of their c measurements.
   A_i = a_1+..+a_i, B_i = b_1+..+b_i (cumulative), A_0 = B_0 = 0.  Grover iterations are a clock.
-  Bob's matrix entry is u(b, a; W, 1 - gamma)  (game is symmetric).
+  gamma = gamma_S is the probability that the first-broadcast block wins a fork caused by an AQMS response;
+  a same-tick tie (both scheduled measurements succeed) is won by each side w.p. 1/2.
+  Bob's matrix entry is u(b, a; W, gamma)  (the game is symmetric for every gamma).
 """
 import itertools
 import math
@@ -92,22 +94,24 @@ def alice_payoff(a, b, gamma, p):
         # Bob's AQMS response (or, at a tie A_i = B_{lB+1}, his scheduled measurement) after A_i - B_lB iterations;
         # Bob cannot respond if he has used all c measurements (Fact 1).
         q = p(A[i] - B[lB]) if lB < c else 0.0
-        total += base * (1 - q)          # u_meas_i : Alice wins alone
-        total += gamma * base * q        # u_AQMS_i : fork, Alice's block survives w.p. gamma
+        tie = lB < c and B[lB + 1] == A[i]
+        total += base * (1 - q)                        # u_meas_i : Alice wins alone
+        total += (0.5 if tie else gamma) * base * q    # u_AQMS_i : fork; Alice found first, or tie (coin flip)
         # --- Bob's i-th measurement: Alice responds (u_resp_i)
         lA = max((j for j in range(c + 1) if A[j] < B[i]), default=0)
         if lA == c or A[lA + 1] == B[i]:
             continue                     # Alice exhausted, or tie (already counted in u_AQMS)
-        total += gamma * p(b[i - 1]) * FB(i - 1) * FA(lA) * p(B[i] - A[lA])
+        total += (1 - gamma) * p(b[i - 1]) * FB(i - 1) * FA(lA) * p(B[i] - A[lA])   # Bob found first
     return total
 
 def bob_payoff(a, b, gamma, p):
-    return alice_payoff(b, a, 1 - gamma, p)
+    return alice_payoff(b, a, gamma, p)
 
 # ---------------------------------------------------------------- 5. brute force
 def brute_force(a, b, g, p):
     """Enumerate every success/failure pattern of all scheduled measurements and of both possible
-    AQMS responses; return Alice's exact expected payoff (1 = wins alone, g = fork, 0 otherwise)."""
+    AQMS responses; return Alice's exact expected payoff (1 = wins alone; in a fork g if she found first,
+    1 - g if Bob did, 1/2 at a same-tick tie; 0 otherwise)."""
     c = len(a)
     A = list(itertools.accumulate(a)); B = list(itertools.accumulate(b))
     total = 0.0
@@ -121,8 +125,8 @@ def brute_force(a, b, g, p):
             t = min(succ)
             aw = any(sa[i] and A[i] == t for i in range(c))
             bw = any(sb[i] and B[i] == t for i in range(c))
-            if aw and bw:                                   # both scheduled measurements succeed at t: fork
-                total += pr * g
+            if aw and bw:                                   # both scheduled measurements succeed at t: tie fork
+                total += pr * 0.5
                 continue
             if aw:                                          # Alice first; Bob responds unless he measures at t anyway
                 if any(B[i] == t for i in range(c)):        # his scheduled measurement at t failed -> Alice alone
@@ -138,7 +142,7 @@ def brute_force(a, b, g, p):
                     pass                                    # Alice's scheduled measurement at t failed -> 0
                 elif sum(A[i] < t for i in range(c)) < c:
                     lastA = max([A[i] for i in range(c) if A[i] < t], default=0)
-                    total += pr * p(t - lastA) * g
+                    total += pr * p(t - lastA) * (1 - g)
     return total
 
 # ---------------------------------------------------------------- 6. piecewise forms as printed in the paper
@@ -153,18 +157,20 @@ def alice_payoff_piecewise(a, b, g, p):
         if j is None:
             tot += pre * FB(c)
         else:
-            tot += pre * FB(j - 1) * ((1 - p(A[i] - B[j - 1])) + g * p(A[i] - B[j - 1]))
+            gj = 0.5 if A[i] == B[j] else g                                                            # tie row
+            tot += pre * FB(j - 1) * ((1 - p(A[i] - B[j - 1])) + gj * p(A[i] - B[j - 1]))
         j = next((j for j in range(1, c + 1) if (j == 1 or A[j - 1] < B[i]) and B[i] < A[j]), None)    # resp rows (strict)
         if j is not None:
-            tot += g * p(b[i - 1]) * FB(i - 1) * FA(j - 1) * p(B[i] - A[j - 1])
+            tot += (1 - g) * p(b[i - 1]) * FB(i - 1) * FA(j - 1) * p(B[i] - A[j - 1])
     return tot
 
 def multi_tie(a, b):
     """KNOWN EDGE CASE of the paper's closed form (not of this code): if a zero-iteration measurement makes one
     player measure twice at the same cumulative time, and the other player also measures at that time, the closed
     form treats only one of the coinciding measurements as the competing one. The resulting error is at most of
-    order p(0) * p(k) where p(0) ~ 1/W (~2e-24 at today's difficulty), i.e. ~1e-38 in both real regimes; it only
-    shows up in toy tests with large p. Brute force and closed form agree exactly on all other profiles."""
+    order p(0) * p(k) where p(0) ~ 1/W (~2e-24 at today's difficulty), i.e. ~1e-38 in nonce-only and ~1e-24 in
+    full-header; it only shows up in toy tests with large p. Brute force and closed form agree exactly on all other
+    profiles."""
     A = list(itertools.accumulate(a)); B = list(itertools.accumulate(b))
     return any(A.count(t) > 1 and t in B for t in A) or any(B.count(t) > 1 and t in A for t in B)
 
@@ -187,17 +193,18 @@ if __name__ == "__main__":
             continue            # known edge case, see multi_tie() docstring
         u = alice_payoff(a, b, g, p_toy)
         worst = max(worst, abs(u - brute_force(a, b, g, p_toy)), abs(u - alice_payoff_piecewise(a, b, g, p_toy)))
-        # payoff bounds: 0 <= A, and A + B <= 1 (fork pays gamma + (1-gamma) = 1 in total)
+        # payoff bounds: 0 <= A, and A + B <= 1 (a fork pays gamma + (1-gamma), or 1/2 + 1/2, in total)
         assert -1e-15 <= u and u + bob_payoff(a, b, g, p_toy) <= 1 + 1e-12
     print(f"closed form vs brute force / piecewise, max |diff| = {worst:.2e}")
     assert worst < 1e-12
 
-    # (b) c = 1 entries
+    # (b) c = 1 entries (first-finder rule: gamma to whoever found first, 1/2 at a tie)
     pa, pb = p_toy(10), p_toy(20)
-    g = 0.3
-    assert abs(alice_payoff([10], [20], g, p_toy) - (pa * (1 - pa) + g * pa * pa)) < 1e-15        # a < b
-    assert abs(alice_payoff([20], [10], g, p_toy) - (pb * (1 - pa) + g * pa * pa)) < 1e-15        # a > b
-    assert abs(alice_payoff([10], [10], g, p_toy) - (pa * (1 - pa) + g * pa * pa)) < 1e-15        # tie
+    for g in (0.3, 0.6, 1.0):
+        assert abs(alice_payoff([10], [20], g, p_toy) - (pa * (1 - pa) + g * pa * pa)) < 1e-15        # a < b
+        assert abs(alice_payoff([20], [10], g, p_toy) - (pb * (1 - pa) + (1 - g) * pa * pa)) < 1e-15  # a > b
+        assert abs(alice_payoff([10], [10], g, p_toy) - (pa * (1 - pa) + 0.5 * pa * pa)) < 1e-15      # tie
+    assert abs(alice_payoff([20], [10], 1.0, p_toy) - pb * (1 - pa)) < 1e-15    # gamma = 1: responding is worthless
 
     # (c) nonce-only exact vs approx; full-header invariance in W
     for D in (1, 2, 8, 2**10, D_2025):

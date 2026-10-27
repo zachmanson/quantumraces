@@ -68,6 +68,7 @@ def payoff_matrix(rows: np.ndarray, cols: np.ndarray, gamma: float, p) -> np.nda
 
     u = sum_i (u_meas_i + u_AQMS_i + u_resp_i), the closed form of reference_model.alice_payoff,
     vectorised over the columns. rows: (n, c) and cols: (m, c) arrays of iteration counts.
+    gamma is the probability that the first-broadcast block wins an AQMS fork; a same-tick tie is 1/2 each.
     """
     rows = np.asarray(rows, dtype=np.int64)
     cols = np.asarray(cols, dtype=np.int64)
@@ -91,12 +92,13 @@ def payoff_matrix(rows: np.ndarray, cols: np.ndarray, gamma: float, p) -> np.nda
             base = pa[i - 1] * FA[i - 1] * FB[idx, lB]
             # Bob's AQMS response (or his tied scheduled measurement); impossible once he is exhausted
             q = np.where(lB < c, p(A_cum[i] - B_cum[idx, lB]), 0.0)
-            total += base * (1 - q)          # u_meas_i
-            total += gamma * base * q        # u_AQMS_i
+            tie = (lB < c) & (B_cum[idx, np.minimum(lB + 1, c)] == A_cum[i])
+            total += base * (1 - q)                            # u_meas_i
+            total += np.where(tie, 0.5, gamma) * base * q      # u_AQMS_i: Alice found first, or a tie
             # Bob's i-th measurement succeeds first and Alice responds (u_resp_i)
             lA = np.sum(A_cum[1:, None] < B_cum[:, i], axis=0)
             responds = (lA < c) & (A_cum[np.minimum(lA + 1, c)] != B_cum[:, i])
-            resp = gamma * pb[:, i - 1] * FB[:, i - 1] * FA[lA] * p(B_cum[:, i] - A_cum[lA])
+            resp = (1 - gamma) * pb[:, i - 1] * FB[:, i - 1] * FA[lA] * p(B_cum[:, i] - A_cum[lA])
             total += np.where(responds, resp, 0.0)
         out[r] = total
     return out
@@ -155,18 +157,28 @@ def expected_payoffs(alice_mixed: dict, bob_mixed: dict, gamma: float, p) -> tup
     sa = np.array(list(alice_mixed.values()))
     sb = np.array(list(bob_mixed.values()))
     alice_ep = sa @ payoff_matrix(Sa, Sb, gamma, p) @ sb
-    bob_ep = sb @ payoff_matrix(Sb, Sa, 1 - gamma, p) @ sa
+    bob_ep = sb @ payoff_matrix(Sb, Sa, gamma, p) @ sa
     return float(alice_ep), float(bob_ep)
+
+
+def measurement_schedule(mixed: dict, kap: int) -> tuple[list[float], float]:
+    """(E[k_1..k_c]/kappa, E[first measurement]/kappa) under a mixed strategy {strategy: probability}.
+
+    The mean schedule includes zero-iteration measurements; the first measurement is the first one
+    at a non-zero iteration count (0 for an all-zero strategy).
+    """
+    S = np.array(list(mixed.keys()), dtype=np.float64)
+    w = np.array(list(mixed.values()), dtype=np.float64)
+    first = np.array([next((k for k in s if k > 0), 0.0) for s in S])
+    return (w @ S / kap).tolist(), float(w @ first / kap)
 
 
 def payoff_matrices(S: np.ndarray, gamma: float, p) -> tuple[np.ndarray, np.ndarray]:
     """Alice's matrix A and Bob's matrix B over the strategy set S (rows: Alice, columns: Bob).
 
-    B[r, col] = u(S[col], S[r]; 1 - gamma), so at gamma = 0.5, B == A.T exactly.
+    B[r, col] = u(S[col], S[r]; gamma): the game is symmetric for every gamma, so B == A.T.
     """
     A = payoff_matrix(S, S, gamma, p)
-    B = payoff_matrix(S, S, 1 - gamma, p).T
-    for M in (A, B):
-        assert np.all(np.isfinite(M)), "payoff matrix has non-finite entries"
-        assert M.min() >= 0.0 and M.max() <= 1.0, f"payoff entries outside [0,1]: [{M.min()}, {M.max()}]"
-    return A, np.ascontiguousarray(B)
+    assert np.all(np.isfinite(A)), "payoff matrix has non-finite entries"
+    assert A.min() >= 0.0 and A.max() <= 1.0, f"payoff entries outside [0,1]: [{A.min()}, {A.max()}]"
+    return A, np.ascontiguousarray(A.T)
