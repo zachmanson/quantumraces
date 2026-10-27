@@ -3,10 +3,10 @@
 Overnight batch for gamma_S = 0.6 (ticket 01, first-finder fork rule). Runs unattended:
 
   1. headline c = 1, 2 (both regimes)     4. headline c = 3, 4 (both regimes)
-  2. gamma_S sweep c = 1, 2               5. c = 3 second equilibria (stop_after = 2, both regimes, untimed)
-  3. no-quantum-miner control             6. gamma_S sweep c = 3, 4
+  2. gamma_S sweep c = 1, 2               5. gamma_S sweep c = 3, 4
+  3. no-quantum-miner control             6. c = 3 second equilibria (stop_after = 2, both regimes, untimed)
 
-Each configuration is its own run.py process with a wall-clock limit (3 h, except step 5). On a timeout the
+Each configuration is its own run.py process with a wall-clock limit (3 h, except step 6). On a timeout the
 whole process tree is killed, the stage it reached is logged, and the batch moves on; a crashed configuration
 (e.g. killed for low memory) is recorded the same way. README.md is rewritten after every configuration.
 
@@ -97,11 +97,12 @@ def plan(root: Path, smoke: bool) -> list[Config]:
         Config('control', 'control', ['--regime', 'full-header', '--control', '--num-simulations', days[2],
                                       '--out-dir', root, *common], root, 'meta_control.json'),
         *headline(3), *headline(4),
+        *sweep(3), *sweep(4),
+        # Untimed, so last: a full-header second-equilibrium search that never ends blocks nothing else.
         *[Config(f'c3_stop_after_2_{r}', 'second equilibria',
                  ['--regime', r, '-c', 3, '--n-q', headline_nq[3], '--gamma', '0.60', '--stop-after', 2,
                   '--num-simulations', days[0],
                   '--out-dir', second, *common], second, f'meta_c3_{r}.json', timeout_s=None) for r in REGIMES],
-        *sweep(3), *sweep(4),
     ]
 
 
