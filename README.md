@@ -21,6 +21,8 @@ Given the input parameters, this code builds the payoff matrices for our two-pla
 pip install -r requirements.txt
 ```
 
+`requirements.txt` pins the versions (Python 3.12.8) that produced `results_v2_g06/`. Gambit's Lemke–Howson returns the first equilibrium it finds, and another pygambit version can return a different one.
+
 Heatmaps use LaTeX text rendering (`usetex`), so a LaTeX installation is needed for plotting.
 
 ## Usage
@@ -83,7 +85,7 @@ python tests/reference_model.py
 ## Outputs (in `--out-dir`)
 
 - `nash_eq_c{c}_{regime}.txt` (or `..._eq{N}.txt`): Nash equilibrium supports, one line per pure strategy in Grover iterations
-- `meta_c{c}_{regime}.json`: configuration, κ, grid, matrix sizes and statistics, timings, expected payoffs, mean measurement schedule E[k_1..k_c]/κ and E[first measurement]/κ (first non-zero count), and simulation statistics
+- `meta_c{c}_{regime}.json`: configuration, κ, grid, matrix sizes and statistics, timings, expected payoffs, mean measurement schedule E[k_1..k_c]/κ and E[first measurement]/κ (first non-zero count), and simulation statistics; each entry in `commands` records the command, git commit, Python and package versions
 - `simulation_data_c{c}_{regime}[_eq{N}].csv`: per-day blocks, stale blocks, races, races ended by a classical block, and binomial p-value
 - `images/`: Nash equilibrium heatmaps (c ≥ 2) and the c = 1 histogram
 

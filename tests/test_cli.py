@@ -1,12 +1,23 @@
 import json
+import platform
 import subprocess
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
+
+
+PINNED = [line.split("==")[0] for line in (REPO / "requirements.txt").read_text().splitlines()
+          if line and not line.startswith("#")]
+
+
+def assert_records_versions(record):
+    assert record["python"] == platform.python_version()
+    assert record["packages"] == {name: version(name) for name in PINNED}     # every pinned package, installed version
 
 
 def run_cli(*args, cwd):
@@ -48,6 +59,8 @@ def test_pipeline_writes_labelled_outputs_for_a_tiny_full_header_run(tmp_path):
     meta = json.loads((out / "meta_c2_full-header.json").read_text())
     assert meta["equilibria"][0]["simulation_s"] > 0          # timing kept on resume
     assert len(meta["commands"]) == 2
+    for record in meta["commands"]:                           # each run, resume included, records its versions
+        assert_records_versions(record)
 
     # A different configuration in the same directory must not reuse the old outputs.
     stdout = run_cli("--regime", "full-header", "-c", "2", "--n-q", "5", "--num-simulations", "24",
@@ -78,6 +91,7 @@ def test_control_simulates_days_without_quantum_miners(tmp_path):
             "--seed", "1", "--out-dir", str(out), cwd=tmp_path)
     meta = json.loads((out / "meta_control.json").read_text())
     assert meta["regime"] == "full-header" and meta["seed"] == 1
+    assert_records_versions(meta)
     stats = meta["stats"]
     assert stats["num_days"] == 24
     assert stats["classical_ended_share"] == 1.0          # with no quantum miners every race ends classically

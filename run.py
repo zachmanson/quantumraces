@@ -21,10 +21,12 @@ Examples:
 
 import argparse
 import json
+import platform
 import shlex
 import subprocess
 import sys
 import time
+from importlib.metadata import version
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +37,7 @@ import simulate_mining as sim
 from util import read_equilibrium, write_equilibria
 
 DEFAULT_SEED = 20261025
+PACKAGES = ('pygambit', 'numpy', 'scipy', 'pandas', 'matplotlib')    # versions recorded in each meta JSON
 
 
 def parse_args():
@@ -86,6 +89,7 @@ def _git_commit() -> str:
 
 def _command_record() -> dict:
     return {'command': 'python ' + ' '.join(shlex.quote(a) for a in sys.argv), 'git_commit': _git_commit(),
+            'python': platform.python_version(), 'packages': {name: version(name) for name in PACKAGES},
             'started': time.strftime('%Y-%m-%d %H:%M:%S')}
 
 
