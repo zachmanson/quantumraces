@@ -1,4 +1,5 @@
 import json
+import math
 import platform
 import subprocess
 import sys
@@ -7,6 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
+import buildpayoff as bp
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -139,5 +142,33 @@ def test_gamma_sweep_collects_one_row_per_c_and_gamma_with_plots(tmp_path):
     assert half["alice_ep"] == pytest.approx(0.5)              # gamma_S = 1/2: all-in at kappa, payoff 1/2
     assert half["alice_first_measurement"] == pytest.approx(1.0)
     assert (df["num_days"] == 24).all()
-    for name in ("p95_stale_rate", "detection_prob_05", "mean_stale_rate", "alice_first_measurement"):
+    for name in ("p95_stale_rate", "prob_stale_over_third", "detection_prob_05", "mean_stale_rate",
+                 "alice_first_measurement"):
         assert (sweep / "images" / f"{name}_vs_gamma.pdf").exists()
+
+
+@pytest.mark.slow
+def test_forks_per_race_writes_one_row_per_equilibrium_and_a_plot(tmp_path):
+    res = tmp_path / "res"
+    common = ("--regime", "full-header", "-c", "1", "--n-q", "4", "--num-simulations", "24", "--processes", "2",
+              "--seed", "1", "--no-plot")
+    run_cli(*common, "--gamma", "0.6", "--out-dir", str(res), cwd=tmp_path)
+    for gamma in ("1.0", "0.5"):
+        run_cli(*common, "--gamma", gamma, "--out-dir", str(res / "sweep" / f"g{gamma}"), cwd=tmp_path)
+    result = subprocess.run([sys.executable, str(REPO / "forks_per_race.py"), str(res)], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=600)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    df = pd.read_csv(res / "sweep" / "forks_per_race.csv")
+    assert sorted(df["source"]) == [".", "sweep/g0.5", "sweep/g1.0"]
+    assert {"stale_aqms", "stale_tie", "stale_classical", "stale_baseline", "stale_per_race", "p_aqms_success",
+            "aqms_response_fraction", "stale_per_day", "avg_stale", "p95_stale_rate",
+            "prob_stale_over_third"} <= set(df.columns)
+    # gamma_S = 1/2: both miners go all-in at kappa, so there is no AQMS response and a tie fork needs
+    # both to succeed before the classical block (P(T > kappa) = 1/e).
+    half = df[df["source"] == "sweep/g0.5"].iloc[0]
+    W = bp.W_from_D(bp.D_2025)
+    p_kappa = float(bp.success_prob("full-header", W)(bp.kappa("full-header", W)))
+    assert half["stale_aqms"] == 0 and half["aqms_responses"] == 0
+    assert half["stale_tie"] == pytest.approx(p_kappa**2 / math.e, rel=1e-9)
+    assert (res / "sweep" / "images" / "forks_per_race_vs_gamma.pdf").exists()

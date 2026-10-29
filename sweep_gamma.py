@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Collect a gamma_S sweep into one CSV and four plots.
+Collect a gamma_S sweep into one CSV and five plots.
 
 The sweep is a set of run.py outputs, one --out-dir per gamma_S point under SWEEP_DIR (e.g. SWEEP_DIR/g0.60/).
 Every meta_c*_*.json found there with simulation stats becomes one row per (c, gamma_S) of
 SWEEP_DIR/stale_rate_vs_gamma.csv; points without stats (unfinished or timed out) are skipped.
-Plots against gamma_S, one line per c, go to SWEEP_DIR/images/: P95, P_det, mean p_stale and
-E[first measurement]/kappa.
+Plots against gamma_S, one line per c, go to SWEEP_DIR/images/: P95, P(p_stale > 1/3), P_det,
+mean p_stale and E[first measurement]/kappa.
 
 Example:
   python sweep_gamma.py results_v2_g06/sweep
@@ -25,6 +25,7 @@ matplotlib.rc('font', family='serif')
 
 PLOTS = {
     'p95_stale_rate': r'95th percentile of $p_{\mathrm{stale}}$',
+    'prob_stale_over_third': r'$P(p_{\mathrm{stale}} > 1/3)$',
     'detection_prob_05': r'$P_{\mathrm{det}}$',
     'mean_stale_rate': r'mean $p_{\mathrm{stale}}$',
     'alice_first_measurement': r'$E[\textrm{first measurement}]/\kappa$',

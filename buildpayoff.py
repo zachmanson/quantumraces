@@ -43,23 +43,22 @@ def _nonce_only_terms(W: float, mmax: int = 40) -> tuple[np.ndarray, np.ndarray]
     return np.array(weights), np.array(angles)
 
 
+def success_terms(regime: str, W: float) -> tuple[np.ndarray, np.ndarray]:
+    """(weights, angles) with p(k) = sum_m weights[m] * sin^2((2k + 1) * angles[m])."""
+    if regime == "nonce-only":
+        return _nonce_only_terms(W)
+    if regime == "full-header":
+        return np.array([1.0]), np.array([math.asin(math.sqrt(1.0 / W))])
+    raise ValueError(f"unknown regime {regime!r}")
+
+
 def success_prob(regime: str, W: float):
     """Return p(k) for the regime. Accepts an int or an integer array and returns float(s)."""
-    if regime == "nonce-only":
-        weights, angles = _nonce_only_terms(W)
+    weights, angles = success_terms(regime, W)
 
-        def p(k):
-            k = np.asarray(k, dtype=np.float64)
-            terms = np.sin((2 * k[..., None] + 1) * angles) ** 2
-            return np.sum(weights * terms, axis=-1)[()]
-    elif regime == "full-header":
-        theta = math.asin(math.sqrt(1.0 / W))
-
-        def p(k):
-            k = np.asarray(k, dtype=np.float64)
-            return (np.sin((2 * k + 1) * theta) ** 2)[()]
-    else:
-        raise ValueError(f"unknown regime {regime!r}")
+    def p(k):
+        k = np.asarray(k, dtype=np.float64)
+        return np.sum(weights * np.sin((2 * k[..., None] + 1) * angles) ** 2, axis=-1)[()]
     return p
 
 
