@@ -89,7 +89,11 @@ python tests/reference_model.py
 - `simulation_data_c{c}_{regime}[_eq{N}].csv`: per-day blocks, stale blocks, races, races ended by a classical block, and binomial p-value
 - `images/`: Nash equilibrium heatmaps (c ≥ 2) and the c = 1 histogram
 
-`results_v2/RESULTS_SUMMARY.md` summarises the published runs. Results from the first version of the paper are kept in `archive/v1/`.
+[`results_v2_g06/README.md`](results_v2_g06/README.md) summarises the published runs (γ_S = 0.6): commit, package versions, and the command, status and timing of every configuration, with the results tables in [`results_v2_g06/tables.md`](results_v2_g06/tables.md) and the paper's figures in `paper_figures_v2/`. The simulation CSVs are stored with Git LFS (run `git lfs pull` after cloning). Results from the first version of the paper are kept in `archive/v1/`.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).
 
 ---
 
