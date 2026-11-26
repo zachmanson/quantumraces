@@ -24,10 +24,10 @@ matplotlib.rc('text', usetex=True)
 matplotlib.rc('font', family='serif')
 
 PLOTS = {
-    'p95_stale_rate': r'95th percentile of $p_{\mathrm{stale}}$',
-    'prob_stale_over_third': r'$P(p_{\mathrm{stale}} > 1/3)$',
+    'p95_stale_rate': r'$P_{95}$',
+    'prob_stale_over_third': r'$P_{>1/3}$',
     'detection_prob_05': r'$P_{\mathrm{det}}$',
-    'mean_stale_rate': r'mean $p_{\mathrm{stale}}$',
+    'mean_stale_rate': r'$\bar{p}_{\mathrm{stale}}$',
     'alice_first_measurement': r'$E[\textrm{first measurement}]/\kappa$',
 }
 
