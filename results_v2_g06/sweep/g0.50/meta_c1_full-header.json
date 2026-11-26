@@ -1,0 +1,160 @@
+{
+  "regime": "full-header",
+  "c": 1,
+  "n_q": 25,
+  "D": 119116256505723.5,
+  "gamma": 0.5,
+  "stop_after": 1,
+  "game_key": {
+    "regime": "full-header",
+    "c": 1,
+    "n_q": 25,
+    "D": 119116256505723.5,
+    "gamma": 0.5,
+    "stop_after": 1
+  },
+  "W": 5.116082326361341e+23,
+  "kappa": 561770130060,
+  "seed": 20261025,
+  "num_simulations": 100000,
+  "grid": [
+    0,
+    44042778196,
+    86287891977,
+    126735341341,
+    165385126289,
+    202237246821,
+    237291702937,
+    270548494636,
+    302007621920,
+    331669084787,
+    359532883238,
+    385599017273,
+    409867486891,
+    432338292094,
+    453011432880,
+    471886909250,
+    488964721204,
+    504244868741,
+    517727351863,
+    529412170568,
+    539299324857,
+    547388814730,
+    553680640187,
+    558174801227,
+    560871297851,
+    561770130060
+  ],
+  "timings": {
+    "payoff_s": 0.0020017623901367188,
+    "elimination_s": 0.0015056133270263672,
+    "lemke_howson_s": 0.020519256591796875
+  },
+  "commands": [
+    {
+      "command": "python run.py --regime full-header -c 1 --n-q 25 --gamma 0.50 --num-simulations 100000 --no-plot --out-dir results_v2_g06/sweep/g0.50 --processes 6",
+      "git_commit": "294db1e83edf20186a21e55c3e71cadb4c4a8f6e",
+      "started": "2026-10-27 18:08:09"
+    }
+  ],
+  "feasible_strategies": 26,
+  "matrix_stats": {
+    "A": {
+      "min": 1.9546206182948974e-24,
+      "max": 1.0,
+      "entries": 676,
+      "distinct": 351
+    },
+    "B": {
+      "min": 1.9546206182948974e-24,
+      "max": 1.0,
+      "entries": 676,
+      "distinct": 351
+    }
+  },
+  "dimension_after_elimination": [
+    1,
+    1
+  ],
+  "matrix_stats_reduced": {
+    "A": {
+      "min": 0.5,
+      "max": 0.5,
+      "entries": 1,
+      "distinct": 1
+    },
+    "B": {
+      "min": 0.5,
+      "max": 0.5,
+      "entries": 1,
+      "distinct": 1
+    }
+  },
+  "equilibrium_files": [
+    "nash_eq_c1_full-header.txt"
+  ],
+  "equilibria": [
+    {
+      "label": "",
+      "file": "nash_eq_c1_full-header.txt",
+      "alice_ep": 0.5,
+      "bob_ep": 0.5,
+      "symmetric": true,
+      "alice_support": [
+        {
+          "strategy": [
+            561770130060
+          ],
+          "fraction_of_kappa": [
+            1.0
+          ],
+          "probability": 1.0
+        }
+      ],
+      "bob_support": [
+        {
+          "strategy": [
+            561770130060
+          ],
+          "fraction_of_kappa": [
+            1.0
+          ],
+          "probability": 1.0
+        }
+      ],
+      "alice_schedule": [
+        1.0
+      ],
+      "alice_first_measurement": 1.0,
+      "bob_schedule": [
+        1.0
+      ],
+      "bob_first_measurement": 1.0,
+      "seed": 20261025,
+      "num_days": 100000,
+      "simulation_s": 118.92591190338135,
+      "stats": {
+        "num_days": 100000,
+        "mean_stale_rate": 0.4669378243773093,
+        "std_stale_rate": 0.01286358104109558,
+        "p95_stale_rate": 0.48775055679287305,
+        "p99_stale_rate": 0.4964200477326969,
+        "max_stale_rate": 0.5210643015521065,
+        "prob_stale_over_third": 1.0,
+        "prob_stale_over_third_ci": [
+          0.9999615854757326,
+          1.0
+        ],
+        "detection_prob_05": 1.0,
+        "detection_prob_05_ci": [
+          0.9999615854757326,
+          1.0
+        ],
+        "avg_blocks": 426.04412,
+        "avg_stale": 198.9429,
+        "classical_ended_share": 0.6329585714551399
+      },
+      "csv": "simulation_data_c1_full-header.csv"
+    }
+  ]
+}

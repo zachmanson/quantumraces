@@ -1,0 +1,435 @@
+{
+  "regime": "full-header",
+  "c": 1,
+  "n_q": 40,
+  "D": 119116256505723.5,
+  "gamma": 0.6,
+  "stop_after": 1,
+  "game_key": {
+    "regime": "full-header",
+    "c": 1,
+    "n_q": 40,
+    "D": 119116256505723.5,
+    "gamma": 0.6,
+    "stop_after": 1
+  },
+  "W": 5.116082326361341e+23,
+  "kappa": 561770130060,
+  "seed": 20261025,
+  "num_simulations": 100000,
+  "grid": [
+    0,
+    27737400171,
+    54772587680,
+    81105562527,
+    106736324711,
+    131664874232,
+    155891211091,
+    179415335287,
+    202237246821,
+    224356945692,
+    245774431901,
+    266489705447,
+    286502766330,
+    305813614551,
+    324422250109,
+    342328673005,
+    359532883238,
+    376034880808,
+    391834665716,
+    406932237962,
+    421327597545,
+    435020744465,
+    448011678722,
+    460300400317,
+    471886909250,
+    482771205520,
+    492953289127,
+    502433160072,
+    511210818354,
+    519286263974,
+    526659496931,
+    533330517225,
+    539299324857,
+    544565919826,
+    549130302133,
+    552992471777,
+    556152428759,
+    558610173078,
+    560365704734,
+    561419023728,
+    561770130060
+  ],
+  "timings": {
+    "payoff_s": 0.004557371139526367,
+    "elimination_s": 0.0,
+    "lemke_howson_s": 708.9071254730225
+  },
+  "commands": [
+    {
+      "command": "python run.py --regime full-header -c 1 --n-q 40 --gamma 0.60 --num-simulations 100000 --no-plot --out-dir results_v2_g06/nq_check_c1/nq40 --processes 6",
+      "git_commit": "d447dcbad4c360172640ba3d074c66213892d18b",
+      "python": "3.12.8",
+      "packages": {
+        "pygambit": "16.3.0",
+        "numpy": "2.0.2",
+        "scipy": "1.15.1",
+        "pandas": "2.2.3",
+        "matplotlib": "3.10.0"
+      },
+      "started": "2026-10-28 20:23:44"
+    }
+  ],
+  "feasible_strategies": 41,
+  "matrix_stats": {
+    "A": {
+      "min": 1.9546206182948974e-24,
+      "max": 1.0,
+      "entries": 1681,
+      "distinct": 900
+    },
+    "B": {
+      "min": 1.9546206182948974e-24,
+      "max": 1.0,
+      "entries": 1681,
+      "distinct": 900
+    }
+  },
+  "dimension_after_elimination": [
+    28,
+    28
+  ],
+  "matrix_stats_reduced": {
+    "A": {
+      "min": 0.3968770486763559,
+      "max": 0.5999998072339782,
+      "entries": 784,
+      "distinct": 433
+    },
+    "B": {
+      "min": 0.3968770486763559,
+      "max": 0.5999998072339782,
+      "entries": 784,
+      "distinct": 433
+    }
+  },
+  "equilibrium_files": [
+    "nash_eq_c1_full-header.txt"
+  ],
+  "equilibria": [
+    {
+      "label": "",
+      "file": "nash_eq_c1_full-header.txt",
+      "alice_ep": 0.472623910519032,
+      "bob_ep": 0.472623910519032,
+      "symmetric": true,
+      "alice_support": [
+        {
+          "strategy": [
+            342328673005
+          ],
+          "fraction_of_kappa": [
+            0.6093749999994437
+          ],
+          "probability": 0.382561679398202
+        },
+        {
+          "strategy": [
+            376034880808
+          ],
+          "fraction_of_kappa": [
+            0.6693749999983757
+          ],
+          "probability": 0.25837775040895017
+        },
+        {
+          "strategy": [
+            406932237962
+          ],
+          "fraction_of_kappa": [
+            0.7243749999996217
+          ],
+          "probability": 0.11686911002894863
+        },
+        {
+          "strategy": [
+            435020744465
+          ],
+          "fraction_of_kappa": [
+            0.7743749999996218
+          ],
+          "probability": 0.08703063580005178
+        },
+        {
+          "strategy": [
+            460300400317
+          ],
+          "fraction_of_kappa": [
+            0.8193749999983757
+          ],
+          "probability": 0.051424160194134955
+        },
+        {
+          "strategy": [
+            482771205520
+          ],
+          "fraction_of_kappa": [
+            0.8593749999994437
+          ],
+          "probability": 0.035956380207313184
+        },
+        {
+          "strategy": [
+            502433160072
+          ],
+          "fraction_of_kappa": [
+            0.8943749999992657
+          ],
+          "probability": 0.01881245932890689
+        },
+        {
+          "strategy": [
+            359532883238
+          ],
+          "fraction_of_kappa": [
+            0.6399999999992879
+          ],
+          "probability": 0.0161964315897983
+        },
+        {
+          "strategy": [
+            519286263974
+          ],
+          "fraction_of_kappa": [
+            0.9243749999996217
+          ],
+          "probability": 0.014209671556445732
+        },
+        {
+          "strategy": [
+            421327597545
+          ],
+          "fraction_of_kappa": [
+            0.75
+          ],
+          "probability": 0.00884186512033929
+        },
+        {
+          "strategy": [
+            533330517225
+          ],
+          "fraction_of_kappa": [
+            0.9493749999987317
+          ],
+          "probability": 0.004495434918182234
+        },
+        {
+          "strategy": [
+            544565919826
+          ],
+          "fraction_of_kappa": [
+            0.9693749999983756
+          ],
+          "probability": 0.0027143016362687336
+        },
+        {
+          "strategy": [
+            552992471777
+          ],
+          "fraction_of_kappa": [
+            0.9843749999985537
+          ],
+          "probability": 0.0013060104147855447
+        },
+        {
+          "strategy": [
+            539299324857
+          ],
+          "fraction_of_kappa": [
+            0.9599999999989319
+          ],
+          "probability": 0.0011352813697496668
+        },
+        {
+          "strategy": [
+            560365704734
+          ],
+          "fraction_of_kappa": [
+            0.9974999999984869
+          ],
+          "probability": 6.882802792281849e-05
+        }
+      ],
+      "bob_support": [
+        {
+          "strategy": [
+            342328673005
+          ],
+          "fraction_of_kappa": [
+            0.6093749999994437
+          ],
+          "probability": 0.382561679398202
+        },
+        {
+          "strategy": [
+            376034880808
+          ],
+          "fraction_of_kappa": [
+            0.6693749999983757
+          ],
+          "probability": 0.25837775040895017
+        },
+        {
+          "strategy": [
+            406932237962
+          ],
+          "fraction_of_kappa": [
+            0.7243749999996217
+          ],
+          "probability": 0.11686911002894863
+        },
+        {
+          "strategy": [
+            435020744465
+          ],
+          "fraction_of_kappa": [
+            0.7743749999996218
+          ],
+          "probability": 0.08703063580005178
+        },
+        {
+          "strategy": [
+            460300400317
+          ],
+          "fraction_of_kappa": [
+            0.8193749999983757
+          ],
+          "probability": 0.051424160194134955
+        },
+        {
+          "strategy": [
+            482771205520
+          ],
+          "fraction_of_kappa": [
+            0.8593749999994437
+          ],
+          "probability": 0.035956380207313184
+        },
+        {
+          "strategy": [
+            502433160072
+          ],
+          "fraction_of_kappa": [
+            0.8943749999992657
+          ],
+          "probability": 0.01881245932890689
+        },
+        {
+          "strategy": [
+            359532883238
+          ],
+          "fraction_of_kappa": [
+            0.6399999999992879
+          ],
+          "probability": 0.0161964315897983
+        },
+        {
+          "strategy": [
+            519286263974
+          ],
+          "fraction_of_kappa": [
+            0.9243749999996217
+          ],
+          "probability": 0.014209671556445732
+        },
+        {
+          "strategy": [
+            421327597545
+          ],
+          "fraction_of_kappa": [
+            0.75
+          ],
+          "probability": 0.00884186512033929
+        },
+        {
+          "strategy": [
+            533330517225
+          ],
+          "fraction_of_kappa": [
+            0.9493749999987317
+          ],
+          "probability": 0.004495434918182234
+        },
+        {
+          "strategy": [
+            544565919826
+          ],
+          "fraction_of_kappa": [
+            0.9693749999983756
+          ],
+          "probability": 0.0027143016362687336
+        },
+        {
+          "strategy": [
+            552992471777
+          ],
+          "fraction_of_kappa": [
+            0.9843749999985537
+          ],
+          "probability": 0.0013060104147855447
+        },
+        {
+          "strategy": [
+            539299324857
+          ],
+          "fraction_of_kappa": [
+            0.9599999999989319
+          ],
+          "probability": 0.0011352813697496668
+        },
+        {
+          "strategy": [
+            560365704734
+          ],
+          "fraction_of_kappa": [
+            0.9974999999984869
+          ],
+          "probability": 6.882802792281849e-05
+        }
+      ],
+      "alice_schedule": [
+        0.6874629590010075
+      ],
+      "alice_first_measurement": 0.6874629590010075,
+      "bob_schedule": [
+        0.6874629590010075
+      ],
+      "bob_first_measurement": 0.6874629590010075,
+      "seed": 20261025,
+      "num_days": 100000,
+      "simulation_s": 215.4533052444458,
+      "stats": {
+        "num_days": 100000,
+        "mean_stale_rate": 0.3345176515723682,
+        "std_stale_rate": 0.01575223111027374,
+        "p95_stale_rate": 0.36009174311926606,
+        "p99_stale_rate": 0.3698300169983,
+        "max_stale_rate": 0.4004474272930649,
+        "prob_stale_over_third": 0.52555,
+        "prob_stale_over_third_ci": [
+          0.5224540944496175,
+          0.5286439425681922
+        ],
+        "detection_prob_05": 1.0,
+        "detection_prob_05_ci": [
+          0.9999615854757326,
+          1.0
+        ],
+        "avg_blocks": 420.28478,
+        "avg_stale": 140.71401,
+        "classical_ended_share": 0.5144714370764719
+      },
+      "csv": "simulation_data_c1_full-header.csv"
+    }
+  ]
+}

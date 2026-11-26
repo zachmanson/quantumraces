@@ -1,0 +1,32 @@
+{
+  "regime": "full-header",
+  "D": 119116256505723.5,
+  "W": 5.116082326361341e+23,
+  "seed": 20261025,
+  "num_simulations": 1000000,
+  "command": "python run.py --regime full-header --control --num-simulations 1000000 --out-dir results_v2_g06 --processes 6",
+  "git_commit": "294db1e83edf20186a21e55c3e71cadb4c4a8f6e",
+  "started": "2026-10-27 19:14:09",
+  "stats": {
+    "num_days": 1000000,
+    "mean_stale_rate": 0.0024048232403572696,
+    "std_stale_rate": 0.004095896408360046,
+    "p95_stale_rate": 0.008547008547008548,
+    "p99_stale_rate": 0.015267175572519083,
+    "max_stale_rate": 0.045454545454545456,
+    "prob_stale_over_third": 0.0,
+    "prob_stale_over_third_ci": [
+      0.0,
+      3.841585242166133e-06
+    ],
+    "detection_prob_05": 0.030984,
+    "detection_prob_05_ci": [
+      0.030646179960650426,
+      0.031325423569237454
+    ],
+    "avg_blocks": 143.992068,
+    "avg_stale": 0.346145,
+    "classical_ended_share": 1.0
+  },
+  "simulation_s": 512.7616419792175
+}

@@ -1,0 +1,185 @@
+{
+  "regime": "nonce-only",
+  "c": 1,
+  "n_q": 50,
+  "D": 119116256505723.5,
+  "gamma": 0.6,
+  "stop_after": 1,
+  "game_key": {
+    "regime": "nonce-only",
+    "c": 1,
+    "n_q": 50,
+    "D": 119116256505723.5,
+    "gamma": 0.6,
+    "stop_after": 1
+  },
+  "W": 5.116082326361341e+23,
+  "kappa": 51471,
+  "seed": 20261025,
+  "num_simulations": 1000000,
+  "grid": [
+    0,
+    2038,
+    4035,
+    5991,
+    7905,
+    9779,
+    11611,
+    13403,
+    15153,
+    16861,
+    18529,
+    20156,
+    21741,
+    23285,
+    24788,
+    26250,
+    27670,
+    29050,
+    30388,
+    31685,
+    32941,
+    34156,
+    35329,
+    36462,
+    37553,
+    38603,
+    39612,
+    40579,
+    41506,
+    42391,
+    43235,
+    44038,
+    44800,
+    45520,
+    46200,
+    46838,
+    47435,
+    47991,
+    48506,
+    48979,
+    49412,
+    49803,
+    50153,
+    50462,
+    50729,
+    50956,
+    51141,
+    51285,
+    51388,
+    51450,
+    51471
+  ],
+  "timings": {
+    "payoff_s": 0.03424715995788574,
+    "elimination_s": 0.0,
+    "lemke_howson_s": 0.12715888023376465
+  },
+  "commands": [
+    {
+      "command": "python run.py --regime nonce-only -c 1 --n-q 50 --gamma 0.60 --num-simulations 1000000 --out-dir results_v2_g06 --processes 6",
+      "git_commit": "294db1e83edf20186a21e55c3e71cadb4c4a8f6e",
+      "started": "2026-10-27 15:21:20"
+    }
+  ],
+  "feasible_strategies": 51,
+  "matrix_stats": {
+    "A": {
+      "min": 1.9546206182948963e-24,
+      "max": 8.395031630683858e-15,
+      "entries": 2601,
+      "distinct": 801
+    },
+    "B": {
+      "min": 1.9546206182948963e-24,
+      "max": 8.395031630683858e-15,
+      "entries": 2601,
+      "distinct": 801
+    }
+  },
+  "dimension_after_elimination": [
+    1,
+    1
+  ],
+  "matrix_stats_reduced": {
+    "A": {
+      "min": 8.395031630683822e-15,
+      "max": 8.395031630683822e-15,
+      "entries": 1,
+      "distinct": 1
+    },
+    "B": {
+      "min": 8.395031630683822e-15,
+      "max": 8.395031630683822e-15,
+      "entries": 1,
+      "distinct": 1
+    }
+  },
+  "equilibrium_files": [
+    "nash_eq_c1_nonce-only.txt"
+  ],
+  "equilibria": [
+    {
+      "label": "",
+      "file": "nash_eq_c1_nonce-only.txt",
+      "alice_ep": 8.395031630683822e-15,
+      "bob_ep": 8.395031630683822e-15,
+      "symmetric": true,
+      "alice_support": [
+        {
+          "strategy": [
+            51471
+          ],
+          "fraction_of_kappa": [
+            1.0
+          ],
+          "probability": 1.0
+        }
+      ],
+      "bob_support": [
+        {
+          "strategy": [
+            51471
+          ],
+          "fraction_of_kappa": [
+            1.0
+          ],
+          "probability": 1.0
+        }
+      ],
+      "alice_schedule": [
+        1.0
+      ],
+      "alice_first_measurement": 1.0,
+      "bob_schedule": [
+        1.0
+      ],
+      "bob_first_measurement": 1.0,
+      "seed": 20261025,
+      "num_days": 1000000,
+      "simulation_s": 1989.8096163272858,
+      "stats": {
+        "num_days": 1000000,
+        "mean_stale_rate": 0.0023992473961924696,
+        "std_stale_rate": 0.004091915341616421,
+        "p95_stale_rate": 0.00847457627118644,
+        "p99_stale_rate": 0.015267175572519083,
+        "max_stale_rate": 0.040268456375838924,
+        "prob_stale_over_third": 0.0,
+        "prob_stale_over_third_ci": [
+          0.0,
+          3.841585242166133e-06
+        ],
+        "detection_prob_05": 0.030644,
+        "detection_prob_05_ci": [
+          0.030307990504101073,
+          0.030983615638064767
+        ],
+        "avg_blocks": 143.978956,
+        "avg_stale": 0.345365,
+        "classical_ended_share": 1.0
+      },
+      "csv": "simulation_data_c1_nonce-only.csv"
+    }
+  ]
+}
