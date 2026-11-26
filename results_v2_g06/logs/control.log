@@ -1,0 +1,29 @@
+
+============================================================
+Configuration
+============================================================
+  regime:          full-header
+  D:               119116256505723.5
+  W:               5.116082e+23
+  kappa:           561770130060
+  c:               3
+  n_q:             35
+  gamma:           0.6
+  stop_after:      1
+  simulated days:  1,000,000  (seed 20261025)
+
+  Control: simulating 1,000,000 days without quantum miners (seed 20261025)
+  100000/1000000 days simulated (10%)
+  200000/1000000 days simulated (20%)
+  300000/1000000 days simulated (30%)
+  400000/1000000 days simulated (40%)
+  500000/1000000 days simulated (50%)
+  600000/1000000 days simulated (60%)
+  700000/1000000 days simulated (70%)
+  800000/1000000 days simulated (80%)
+  900000/1000000 days simulated (90%)
+  1000000/1000000 days simulated (100%)
+  Raw data saved to: results_v2_g06\simulation_data_control.csv
+  mean p_stale 0.002405  P_det 0.030984 [0.030646, 0.031325]
+
+Metadata written to results_v2_g06\meta_control.json

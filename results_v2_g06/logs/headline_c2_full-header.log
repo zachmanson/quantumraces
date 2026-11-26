@@ -1,0 +1,47 @@
+
+============================================================
+Configuration
+============================================================
+  regime:          full-header
+  D:               119116256505723.5
+  W:               5.116082e+23
+  kappa:           561770130060
+  c:               2
+  n_q:             45
+  gamma:           0.6
+  stop_after:      1
+  simulated days:  1,000,000  (seed 20261025)
+
+============================================================
+Game
+============================================================
+  |S0'| = 46, feasible c-tuples = 484
+  Payoff matrices built in 0.1s; A in [3.909241e-24, 1.000000e+00], 106394 distinct values
+  After elimination: 97 x 97 (0.1s)
+  Lemke-Howson (stop_after=1) started 2026-10-27 17:39:58
+  Lemke-Howson found 1 equilibria in 46.2s
+
+============================================================
+Equilibria
+============================================================
+
+  [nash_eq_c2_full-header.txt] Alice U = 0.476964, Bob U = 0.476964, symmetric = True
+  E[first measurement]/kappa: Alice 0.6172, Bob 0.6172
+  Simulating 1,000,000 days (seed 20261025)
+  100000/1000000 days simulated (10%)
+  200000/1000000 days simulated (20%)
+  300000/1000000 days simulated (30%)
+  400000/1000000 days simulated (40%)
+  500000/1000000 days simulated (50%)
+  600000/1000000 days simulated (60%)
+  700000/1000000 days simulated (70%)
+  800000/1000000 days simulated (80%)
+  900000/1000000 days simulated (90%)
+  1000000/1000000 days simulated (100%)
+  Raw data saved to: results_v2_g06\simulation_data_c2_full-header.csv
+  Simulation time: 1640.0s
+  P95 0.318907  P99 0.329439  max 0.365789
+  P(stale > 1/3) 0.004546 [0.004416, 0.004680]  P_det 1.000000 [0.999996, 1.000000]
+  Avg blocks/day 415.6354  avg stale/day 121.6659  races ended by a classical block 0.4893
+
+Metadata written to results_v2_g06\meta_c2_full-header.json

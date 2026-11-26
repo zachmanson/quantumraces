@@ -1,0 +1,51 @@
+
+============================================================
+Configuration
+============================================================
+  regime:          nonce-only
+  D:               119116256505723.5
+  W:               5.116082e+23
+  kappa:           51471
+  c:               3
+  n_q:             35
+  gamma:           0.6
+  stop_after:      1
+  simulated days:  1,000,000  (seed 20261025)
+
+============================================================
+Game
+============================================================
+  |S0'| = 36, feasible c-tuples = 1936
+  Payoff matrices built in 8.9s; A in [5.863862e-24, 8.395032e-15], 10134 distinct values
+  After elimination: 3 x 3 (5.6s)
+  Lemke-Howson (stop_after=1) started 2026-10-27 19:22:58
+  Lemke-Howson found 1 equilibria in 0.0s
+
+============================================================
+Equilibria
+============================================================
+
+  [nash_eq_c3_nonce-only.txt] Alice U = 0.000000, Bob U = 0.000000, symmetric = True
+  E[first measurement]/kappa: Alice 1.0000, Bob 1.0000
+C:\Users\zachm\OneDrive\Documents\Github\quantumraces\visualize_nash_eq.py:136: UserWarning: Tight layout not applied. The left and right margins cannot be made large enough to accommodate all Axes decorations.
+  plt.tight_layout()
+C:\Users\zachm\OneDrive\Documents\Github\quantumraces\visualize_nash_eq.py:136: UserWarning: Tight layout not applied. The left and right margins cannot be made large enough to accommodate all Axes decorations.
+  plt.tight_layout()
+  Simulating 1,000,000 days (seed 20261025)
+  100000/1000000 days simulated (10%)
+  200000/1000000 days simulated (20%)
+  300000/1000000 days simulated (30%)
+  400000/1000000 days simulated (40%)
+  500000/1000000 days simulated (50%)
+  600000/1000000 days simulated (60%)
+  700000/1000000 days simulated (70%)
+  800000/1000000 days simulated (80%)
+  900000/1000000 days simulated (90%)
+  1000000/1000000 days simulated (100%)
+  Raw data saved to: results_v2_g06\simulation_data_c3_nonce-only.csv
+  Simulation time: 4910.1s
+  P95 0.008475  P99 0.015267  max 0.046358
+  P(stale > 1/3) 0.000000 [0.000000, 0.000004]  P_det 0.030271 [0.029937, 0.030609]
+  Avg blocks/day 144.0099  avg stale/day 0.3449  races ended by a classical block 1.0000
+
+Metadata written to results_v2_g06\meta_c3_nonce-only.json

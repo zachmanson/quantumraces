@@ -4,3 +4,11 @@ __pycache__/
 .pytest_cache/
 .vscode/
 docs/
+
+# Abandoned partial gamma=0.5 run (superseded by results_v2_g06/); kept locally, not tracked
+results_v2/images/
+results_v2/logs/
+results_v2/*.csv
+results_v2/*.json
+results_v2/*.txt
+results_v2/tables.md

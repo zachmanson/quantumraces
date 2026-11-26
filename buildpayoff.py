@@ -1,367 +1,183 @@
-import numpy as np
+"""Payoff model for the two-player quantum mining race (paper sections on units, regimes and payoffs).
+
+Every function works on Grover iteration counts, never on grid indices.
+"""
 import math
-import sys
-import pygambit
-from util import cartesian
-from functools import lru_cache
-import matplotlib.pyplot as plt
-from multiprocessing import Pool
-import os
 
-_builder_worker = None
+import numpy as np
 
-def _init_builder_worker(builder):
-    global _builder_worker
-    _builder_worker = builder
+D_2025 = 119116256505723.5   # network difficulty, 9 May 2025 (blockchain.com)
+REGIMES = ("nonce-only", "full-header")
 
-def _compute_payoff_row(args):
-    row, bob = args
-    builder = _builder_worker
-    S_valid = builder.S_valid
-    dim = len(S_valid)
-    row_vals = np.zeros(dim, dtype=np.float64)
-    for col in range(dim):
-        if bob:
-            alice_strat = S_valid[col]
-            bob_strat = S_valid[row]
-        else:
-            alice_strat = S_valid[row]
-            bob_strat = S_valid[col]
-        total_payoff = np.float64(0.0)
-        for play in range(1, builder.num_plays + 1):
-            total_payoff += builder.calculate_payoff_for_play(alice_strat, bob_strat, play)
-        row_vals[col] = total_payoff
-    return row_vals
+N32 = 2.0**32
+THETA32 = math.asin(2.0**-16)
 
 
-class BuildPayoff:
-    def __init__(self, n_q: int, num_plays: int, D: float, clustering_factor: float = 1.0, gamma: float = 0.5, out_fname = 'output.txt', scale_with_D: bool = False, stop_after: int = 1):
-        self.n_q = n_q
-        self.num_plays = num_plays
-        self.D = D
-        self.scale_with_D = scale_with_D
-        self.stop_after = stop_after
-
-        if self.scale_with_D:
-            self.max_K = np.floor(np.pi / 4 * np.sqrt(self.D))
-        else:
-            self.max_K = np.floor(np.pi / 4 * np.sqrt(min(self.D, 2**32)))
-            
-        print(f"Using max_K: {self.max_K}")
-        self.clustering_factor = clustering_factor
-        self.gamma = np.float64(gamma)
-        self.grid = self.create_quadratic_grid()
-        self.out_fname = out_fname
-
-    def create_quadratic_grid(self) -> np.ndarray:
-        linear_grid = np.linspace(0, 1, self.n_q)
-        quadratic_grid = 1 - (1 - linear_grid)**self.clustering_factor
-        scaled_grid = quadratic_grid * self.max_K
-        rounded_grid = np.round(scaled_grid).astype(int)
-
-        unique_grid = np.unique(rounded_grid)
-        num_removed = len(rounded_grid) - len(unique_grid)
-
-        print(f"Grid points before deduplication: {len(rounded_grid)}")
-        print(f"Grid points after deduplication:  {len(unique_grid)} ({num_removed} duplicate(s) removed)")
-
-        # Update n_q to reflect the actual number of unique strategies (0-indexed)
-        self.n_q = len(unique_grid) - 1
-
-        return unique_grid
-
-    def grid_to_iterations(self, grid_point: int) -> int:
-        return self.grid[grid_point]
-
-    @staticmethod
-    @lru_cache(maxsize=None)
-    def p(k: int, D: float) -> np.float64:
-        return np.float64((math.sin(2 * (k + 1/2) * math.asin(1/np.sqrt(D))))**2)
-
-    def get_payoff(self, bob: bool = False) -> np.ndarray:
-        set_K = np.arange(0, self.n_q + 1)
-        arrs = (set_K for i in range(self.num_plays))
-        S = cartesian(arrs)
-        
-        S_valid = S[np.sum(self.grid[S], axis=1) <= self.max_K]
-        self.S_valid = S_valid
-        dim = len(S_valid)
-
-        print(f"Filtered strategy set size: {dim} (out of {len(S)} total)")
-
-        if not bob:
-            max_K_index = self.n_q
-            expected_strategies = []
-            for i in range(self.num_plays):
-                strat = [0] * self.num_plays
-                strat[i] = max_K_index
-                expected_strategies.append(tuple(strat))
-            
-            print(f"\nChecking boundary pure strategies:")
-            all_found = True
-            for expected in expected_strategies:
-                found = any(tuple(s) == expected for s in S_valid)
-                iterations = [self.grid_to_iterations(idx) for idx in expected]
-                status = 'FOUND' if found else 'NOT FOUND'
-                print(f"  Strategy {expected} (iterations: {iterations}): {status}")
-                if not found:
-                    all_found = False
-            
-            if all_found:
-                print("All expected boundary pure strategies found in filtered set")
-            else:
-                print("Some expected boundary pure strategies NOT found in filtered set")
-
-        original_gamma = self.gamma
-        if bob:
-            self.gamma = 1 - self.gamma
-
-        n_workers = min(os.cpu_count() or 1, dim)
-        with Pool(processes=n_workers, initializer=_init_builder_worker, initargs=(self,)) as pool:
-            rows = pool.map(_compute_payoff_row, [(row, bob) for row in range(dim)])
-        A = np.array(rows, dtype=np.float64)
-        
-        self.gamma = original_gamma
-
-        return np.nan_to_num(A, nan = 0.0, posinf = 0.0, neginf = 0.0)
-    
-    def calculate_payoff_for_play(self, row_strat: list[int], col_strat: list[int], play: int) -> np.float64:
-        prefactor = self.get_prefactor(row_strat, play)
-
-        if prefactor == 0:
-            return np.float64(0.0)
-
-        row_cum = self.get_cumulative_iterations(row_strat, play)
-        col_cumulative = [self.get_cumulative_iterations(col_strat, i + 1) for i in range(len(col_strat))]
-
-        success_part = self.get_success_failure_part(row_cum, col_cumulative)
-        aggressive_part = self.get_aggressive_part(row_strat, play, row_cum, col_cumulative)
-
-        total_payoff = prefactor * success_part + self.gamma * aggressive_part
-
-        return np.float64(total_payoff)
-
-    def get_prefactor(self, strategy: list[int], play: int) -> np.float64:
-        current_iterations = self.grid_to_iterations(strategy[play - 1])
-        prefactor = self.p(current_iterations, self.D)
-
-        for prev_play in range(play - 1):
-            prev_iterations = self.grid_to_iterations(strategy[prev_play])
-            prefactor *= (1 - self.p(prev_iterations, self.D))
-
-        return np.float64(prefactor)
-    
-    def get_cumulative_iterations(self, strategy: list[int], up_to_play: int) -> int:
-        return sum(self.grid_to_iterations(strategy[i]) for i in range(up_to_play))
-
-    def get_success_failure_part(self, row_cum: int, col_cumulative: list[int]) -> np.float64:
-        if row_cum < col_cumulative[0]:
-            return np.float64(1.0)
-
-        num_col_strats = 0
-
-        for i, col_cum in enumerate(col_cumulative):
-            if row_cum < col_cum:
-                break
-            elif row_cum == col_cum:
-                num_col_strats = i + 1
-                break
-            else:
-                num_col_strats = i + 1
-
-        product = np.float64(1.0)
-        for i in range(num_col_strats):
-            col_iterations = col_cumulative[i] - (col_cumulative[i - 1] if i > 0 else 0)
-            product = product * (1 - self.p(col_iterations, self.D))
-
-        return product
-    
-    def get_aggressive_part(self, row_strat: list[int], play: int, row_cum: int, col_cumulative: list[int]) -> np.float64:
-        current_row_iterations = self.grid_to_iterations(row_strat[play - 1])
-
-        ell = 0
-        bob_last_cum = 0
-        
-        for j, col_cum in enumerate(col_cumulative):
-            if col_cum < row_cum:
-                ell = j + 1
-                bob_last_cum = col_cum
-            else:
-                break
-        
-        product_term = np.float64(1.0)
-        
-        for k in range(play - 1):  
-            alice_cum_k = self.get_cumulative_iterations(row_strat, k + 1) 
-            if alice_cum_k > bob_last_cum:
-                alice_iterations_k = self.grid_to_iterations(row_strat[k])
-                product_term *= (1 - self.p(alice_iterations_k, self.D))
-        
-        bob_aqms_iterations = row_cum - bob_last_cum
-        
-        aqms_term = (self.p(current_row_iterations, self.D) * 
-                    product_term * 
-                    self.p(bob_aqms_iterations, self.D))
-        
-        return np.float64(aqms_term)
-
-    def print_results(self, result: list, player: str, file=None) -> None:
-        for i, value in enumerate(result):
-            if abs(value) != 0.0:
-                strat = [self.grid_to_iterations(x) for x in self.S_valid[i]]
-                print('{} {} {}'.format(player, strat, value), file=file)
-        return
-
-    def analyze_extreme_payoffs(self, A: np.ndarray, B: np.ndarray, player_name: str = "Alice") -> None:
-        matrix = A if player_name == "Alice" else B
-
-        max_val = np.max(matrix)
-        min_val = np.min(matrix)
-        
-        print(f"\n=== EXTREME PAYOFF ANALYSIS FOR {player_name.upper()} ===")
-        print(f"Maximum payoff: {max_val}")
-        print(f"Minimum payoff: {min_val}")
-        
-        max_positions = np.where(matrix == max_val)
-        max_row_col_pairs = list(zip(max_positions[0], max_positions[1]))
-        
-        min_positions = np.where(matrix == min_val)
-        min_row_col_pairs = list(zip(min_positions[0], min_positions[1]))
-        
-        print(f"\nMAXIMUM PAYOFF COMBINATIONS (Value: {max_val}):")
-        print(f"Found {len(max_row_col_pairs)} combination(s)")
-        
-        for i, (row_idx, col_idx) in enumerate(max_row_col_pairs):
-            row_strat_indices = self.S_valid[row_idx]
-            col_strat_indices = self.S_valid[col_idx]
-
-            row_strat_iterations = [self.grid_to_iterations(x) for x in row_strat_indices]
-            col_strat_iterations = [self.grid_to_iterations(x) for x in col_strat_indices]
-
-            print(f"  {i+1}. Row strategy (indices): {list(row_strat_indices)} -> Iterations: {row_strat_iterations}")
-            print(f"     Col strategy (indices): {list(col_strat_indices)} -> Iterations: {col_strat_iterations}")
-
-        print(f"\nMINIMUM PAYOFF COMBINATIONS (Value: {min_val}):")
-        print(f"Found {len(min_row_col_pairs)} combination(s)")
-
-        for i, (row_idx, col_idx) in enumerate(min_row_col_pairs):
-            row_strat_indices = self.S_valid[row_idx]
-            col_strat_indices = self.S_valid[col_idx]
-
-            row_strat_iterations = [self.grid_to_iterations(x) for x in row_strat_indices]
-            col_strat_iterations = [self.grid_to_iterations(x) for x in col_strat_indices]
-
-            print(f"  {i+1}. Row strategy (indices): {list(row_strat_indices)} -> Iterations: {row_strat_iterations}")
-            print(f"     Col strategy (indices): {list(col_strat_indices)} -> Iterations: {col_strat_iterations}")
-
-    def get_nash_eq_pygambit(self, A: np.ndarray, B: np.ndarray) -> None:
-        A_float = np.nan_to_num(A, nan=0.0, posinf=0.0, neginf=0.0)
-        B_float = np.nan_to_num(B, nan=0.0, posinf=0.0, neginf=0.0)
-
-        print(f"Matrix A min: {np.min(A_float)}, max: {np.max(A_float)}")
-        print(f"Matrix B min: {np.min(B_float)}, max: {np.max(B_float)}")
-
-        game = pygambit.Game.from_arrays(A_float, B_float)
-
-        game.players[0].label = "Alice"
-        game.players[1].label = "Bob"
-
-        results = pygambit.nash.lcp_solve(game, rational=True, stop_after=self.stop_after)
-
-        with open(self.out_fname, 'w') as f:
-            for eq in results.equilibria:
-                alice_strat = eq['Alice']
-                alice_probs = [float(p) for _, p in alice_strat]
-
-                bob_strat = eq['Bob']
-                bob_probs = [float(p) for _, p in bob_strat]
-
-                self.print_results(alice_probs, 'Alice', file=f)
-                self.print_results(bob_probs, 'Bob', file=f)
-                print('-------------', file=f)
-
-        return
-    
-
-    def eliminate_dominated(self, A, B):
-        """Iteratively eliminate strictly dominated strategies.
-        Also updates self.S_valid to reflect the surviving strategies."""
-        row_indices = np.arange(A.shape[0])
-        col_indices = np.arange(A.shape[1])
-        changed = True
-        while changed:
-            changed = False
-            # Check row player (rows of A)
-            # dominated_rows[i] = True if any row j beats row i in every column
-            dominated_rows = np.any(np.all(A[:, np.newaxis, :] > A[np.newaxis, :, :], axis=2), axis=0)
-            keep_rows = np.where(~dominated_rows)[0]
-            if len(keep_rows) < A.shape[0]:
-                A, B = A[keep_rows], B[keep_rows]
-                row_indices = row_indices[keep_rows]
-                changed = True
-
-            # Check column player (columns of B)
-            # dominated_cols[j] = True if any column j' beats column j in every row
-            dominated_cols = np.any(np.all(B[:, :, np.newaxis] > B[:, np.newaxis, :], axis=0), axis=0)
-            keep_cols = np.where(~dominated_cols)[0]
-            if len(keep_cols) < A.shape[1]:
-                A, B = A[:, keep_cols], B[:, keep_cols]
-                col_indices = col_indices[keep_cols]
-                changed = True
-
-        self.S_valid = self.S_valid[row_indices]
-        return A, B
-
-    def get_payoff_element(self, row_strat: list, col_strat: list) -> np.float64:
-        total_payoff = np.float64(0.0)
-        for play in range(1, self.num_plays + 1):
-            total_payoff += self.calculate_payoff_for_play(row_strat, col_strat, play)
-        return np.float64(total_payoff)
-
-    def test_quadratic_grid(self) -> None:
-        print("Grid points:")
-        print(self.grid)
-        
-        differences = np.diff(self.grid)
-        print("\nDifferences between consecutive points:")
-        print(differences)
-        
-        if all(differences[i] <= differences[i+1] for i in range(len(differences)-1)):
-            print("\nGrid spacing is NOT decreasing toward upper bound!")
-        else:
-            print("\nGrid spacing is generally decreasing toward upper bound!")
-        
-        plt.figure(figsize=(10, 6))
-        plt.plot(range(len(self.grid)), self.grid, 'o-')
-        plt.title(f"Quadratic Grid Distribution (clustering_factor={self.clustering_factor})")
-        plt.xlabel("Grid Index")
-        plt.ylabel("Grover Iterations")
-        plt.grid(True)
-        plt.savefig("images/quadratic_grid_distribution.png")
-        print("\nGrid distribution plot saved as 'quadratic_grid_distribution.png'")
+def W_from_D(D: float) -> float:
+    """Expected work (hashes per block) W = D * 2^48 / (2^16 - 1)."""
+    return D * 2.0**48 / (2**16 - 1)
 
 
-    def compute_expected_payoff(self, alice_mixed_strat: dict, bob_mixed_strat: dict, player: str = "Alice") -> np.float64:
-        expected_payoff = np.float64(0.0)
-        
-        original_gamma = self.gamma
-        
-        if player == "Bob":
-            self.gamma = 1 - self.gamma
-        
-        for alice_strat, alice_prob in alice_mixed_strat.items():
-            for bob_strat, bob_prob in bob_mixed_strat.items():
-                alice_strat_list = list(alice_strat)
-                bob_strat_list = list(bob_strat)
-                
-                if player == "Alice":
-                    payoff = self.get_payoff_element(alice_strat_list, bob_strat_list)
-                else:  # Bob
-                    payoff = self.get_payoff_element(bob_strat_list, alice_strat_list)
-                
-                expected_payoff += alice_prob * bob_prob * payoff
-        
-        self.gamma = original_gamma
-        
-        return expected_payoff
+def kappa(regime: str, W: float) -> int:
+    """Grover iteration budget: k_opt^32 in nonce-only, k_opt(W) in full-header."""
+    if regime == "nonce-only":
+        return math.floor(math.pi / (4 * THETA32))
+    if regime == "full-header":
+        return math.floor(math.pi / (4 * math.asin(math.sqrt(1.0 / W))))
+    raise ValueError(f"unknown regime {regime!r}")
 
+
+def grid(n_q: int, kap: int) -> np.ndarray:
+    """Sampled iteration counts S_0' = { floor((1 - (1 - i/n_q)^2) * kappa) : i = 0..n_q }, deduplicated."""
+    return np.array(sorted({math.floor((1 - (1 - i / n_q) ** 2) * kap) for i in range(n_q + 1)}), dtype=np.int64)
+
+
+def _nonce_only_terms(W: float, mmax: int = 40) -> tuple[np.ndarray, np.ndarray]:
+    """Binomial(2^32, 1/W) weights and Grover angles for m = 1..mmax marked nonces."""
+    q = 1.0 / W
+    weights, angles = [], []
+    for m in range(1, mmax + 1):
+        log_binom = sum(math.log(N32 - j) for j in range(m)) - math.lgamma(m + 1)
+        weights.append(math.exp(log_binom + m * math.log(q) + (N32 - m) * math.log1p(-q)))
+        angles.append(math.asin(math.sqrt(m / N32)))
+    return np.array(weights), np.array(angles)
+
+
+def success_terms(regime: str, W: float) -> tuple[np.ndarray, np.ndarray]:
+    """(weights, angles) with p(k) = sum_m weights[m] * sin^2((2k + 1) * angles[m])."""
+    if regime == "nonce-only":
+        return _nonce_only_terms(W)
+    if regime == "full-header":
+        return np.array([1.0]), np.array([math.asin(math.sqrt(1.0 / W))])
+    raise ValueError(f"unknown regime {regime!r}")
+
+
+def success_prob(regime: str, W: float):
+    """Return p(k) for the regime. Accepts an int or an integer array and returns float(s)."""
+    weights, angles = success_terms(regime, W)
+
+    def p(k):
+        k = np.asarray(k, dtype=np.float64)
+        return np.sum(weights * np.sin((2 * k[..., None] + 1) * angles) ** 2, axis=-1)[()]
+    return p
+
+
+def payoff_matrix(rows: np.ndarray, cols: np.ndarray, gamma: float, p) -> np.ndarray:
+    """Alice's payoff u(a, b; W, gamma) for every row strategy a against every column strategy b.
+
+    u = sum_i (u_meas_i + u_AQMS_i + u_resp_i), the closed form of reference_model.alice_payoff,
+    vectorised over the columns. rows: (n, c) and cols: (m, c) arrays of iteration counts.
+    gamma is the probability that the first-broadcast block wins an AQMS fork; a same-tick tie is 1/2 each.
+    """
+    rows = np.asarray(rows, dtype=np.int64)
+    cols = np.asarray(cols, dtype=np.int64)
+    c = rows.shape[1]
+    m = cols.shape[0]
+    idx = np.arange(m)
+
+    B_cum = np.hstack([np.zeros((m, 1), dtype=np.int64), np.cumsum(cols, axis=1)])   # B_0..B_c per column
+    pb = np.asarray(p(cols)).reshape(m, c)
+    FB = np.hstack([np.ones((m, 1)), np.cumprod(1 - pb, axis=1)])                # Bob fails his first n
+
+    out = np.empty((rows.shape[0], m), dtype=np.float64)
+    for r, a in enumerate(rows):
+        A_cum = np.concatenate([[0], np.cumsum(a)])
+        pa = np.asarray(p(a)).reshape(c)
+        FA = np.concatenate([[1.0], np.cumprod(1 - pa)])
+        total = np.zeros(m)
+        for i in range(1, c + 1):
+            # Alice's i-th measurement; Bob's last measurement strictly before A_i (B_cum is non-decreasing)
+            lB = np.sum(B_cum[:, 1:] < A_cum[i], axis=1)
+            base = pa[i - 1] * FA[i - 1] * FB[idx, lB]
+            # Bob's AQMS response (or his tied scheduled measurement); impossible once he is exhausted
+            q = np.where(lB < c, p(A_cum[i] - B_cum[idx, lB]), 0.0)
+            tie = (lB < c) & (B_cum[idx, np.minimum(lB + 1, c)] == A_cum[i])
+            total += base * (1 - q)                            # u_meas_i
+            total += np.where(tie, 0.5, gamma) * base * q      # u_AQMS_i: Alice found first, or a tie
+            # Bob's i-th measurement succeeds first and Alice responds (u_resp_i)
+            lA = np.sum(A_cum[1:, None] < B_cum[:, i], axis=0)
+            responds = (lA < c) & (A_cum[np.minimum(lA + 1, c)] != B_cum[:, i])
+            resp = (1 - gamma) * pb[:, i - 1] * FB[:, i - 1] * FA[lA] * p(B_cum[:, i] - A_cum[lA])
+            total += np.where(responds, resp, 0.0)
+        out[r] = total
+    return out
+
+
+def feasible_strategies(values: np.ndarray, c: int, kap: int) -> np.ndarray:
+    """All c-tuples drawn from the sampled counts whose total is at most kappa."""
+    S = np.array(np.meshgrid(*([np.asarray(values, dtype=np.int64)] * c), indexing="ij")).reshape(c, -1).T
+    return S[S.sum(axis=1) <= kap]
+
+
+def _dominated_rows(M: np.ndarray) -> np.ndarray:
+    """dominated[i] is True if some row strictly beats row i in every column."""
+    return np.array([np.any(np.all(M > M[i], axis=1)) for i in range(M.shape[0])], dtype=bool)
+
+
+def eliminate_dominated(A: np.ndarray, B: np.ndarray):
+    """Iteratively eliminate strictly dominated pure strategies for both players.
+
+    Returns the reduced A, B and the surviving row (Alice) and column (Bob) indices into the inputs.
+    """
+    rows = np.arange(A.shape[0])
+    cols = np.arange(A.shape[1])
+    changed = True
+    while changed:
+        changed = False
+        keep = ~_dominated_rows(A)
+        if not keep.all():
+            A, B, rows = A[keep], B[keep], rows[keep]
+            changed = True
+        keep = ~_dominated_rows(B.T)
+        if not keep.all():
+            A, B, cols = A[:, keep], B[:, keep], cols[keep]
+            changed = True
+    return A, B, rows, cols
+
+
+def solve_nash(A: np.ndarray, B: np.ndarray, stop_after: int = 1) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Lemke-Howson via Gambit (rational arithmetic). Returns [(sigma_A, sigma_B), ...]."""
+    import pygambit
+
+    game = pygambit.Game.from_arrays(A, B)
+    game.players[0].label = "Alice"
+    game.players[1].label = "Bob"
+    result = pygambit.nash.lcp_solve(game, rational=True, stop_after=stop_after)
+    return [
+        tuple(np.array([float(eq[s]) for s in player.strategies]) for player in game.players)
+        for eq in result.equilibria
+    ]
+
+
+def expected_payoffs(alice_mixed: dict, bob_mixed: dict, gamma: float, p) -> tuple[float, float]:
+    """(U_A, U_B) = sigma_A^T A sigma_B and sigma_A^T B sigma_B, evaluated on the supports' iteration counts."""
+    Sa = np.array(list(alice_mixed.keys()), dtype=np.int64)
+    Sb = np.array(list(bob_mixed.keys()), dtype=np.int64)
+    sa = np.array(list(alice_mixed.values()))
+    sb = np.array(list(bob_mixed.values()))
+    alice_ep = sa @ payoff_matrix(Sa, Sb, gamma, p) @ sb
+    bob_ep = sb @ payoff_matrix(Sb, Sa, gamma, p) @ sa
+    return float(alice_ep), float(bob_ep)
+
+
+def measurement_schedule(mixed: dict, kap: int) -> tuple[list[float], float]:
+    """(E[k_1..k_c]/kappa, E[first measurement]/kappa) under a mixed strategy {strategy: probability}.
+
+    The mean schedule includes zero-iteration measurements; the first measurement is the first one
+    at a non-zero iteration count (0 for an all-zero strategy).
+    """
+    S = np.array(list(mixed.keys()), dtype=np.float64)
+    w = np.array(list(mixed.values()), dtype=np.float64)
+    first = np.array([next((k for k in s if k > 0), 0.0) for s in S])
+    return (w @ S / kap).tolist(), float(w @ first / kap)
+
+
+def payoff_matrices(S: np.ndarray, gamma: float, p) -> tuple[np.ndarray, np.ndarray]:
+    """Alice's matrix A and Bob's matrix B over the strategy set S (rows: Alice, columns: Bob).
+
+    B[r, col] = u(S[col], S[r]; gamma): the game is symmetric for every gamma, so B == A.T.
+    """
+    A = payoff_matrix(S, S, gamma, p)
+    assert np.all(np.isfinite(A)), "payoff matrix has non-finite entries"
+    assert A.min() >= 0.0 and A.max() <= 1.0, f"payoff entries outside [0,1]: [{A.min()}, {A.max()}]"
+    return A, np.ascontiguousarray(A.T)

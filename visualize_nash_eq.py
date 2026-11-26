@@ -1,7 +1,12 @@
+import os
+
 import numpy as np
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+
+from util import read_equilibrium
 
 matplotlib.rc('text', usetex=True)
 matplotlib.rc('font', family='serif')
@@ -33,42 +38,15 @@ FONT_TICK = 8
 FONT_PANEL = 9
 
 
-def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization_factor=1500, difficulty_label="high"):
-    alice_data, bob_data = {}, {}
-    try:
-        with open(filename, 'r') as f:
-            lines = f.read().strip().split('\n')
-    except FileNotFoundError:
-        print(f"Error: File '{filename}' not found.")
-        return
+def visualize_equilibrium(filename, kappa, label, images_dir="images"):
+    """Plot one equilibrium file, normalised by the regime's budget kappa.
 
-    for line in lines:
-        if not line.strip():
-            continue
-        if line.startswith('---'):
-            continue
-        parts = line.split(' ', 1)
-        if len(parts) < 2:
-            print(f"Skipping malformed line: {repr(line)}")
-            continue
-        player = parts[0]
-        tuple_str_end_idx = parts[1].rfind(']')
-        if tuple_str_end_idx == -1:
-            print(f"Skipping line with no ']': {repr(line)}")
-            continue
-        tuple_str = parts[1][:tuple_str_end_idx + 1]
-        try:
-            current_tuple = eval(tuple_str.replace('np.int64(', '').replace(')', ''))
-        except Exception:
-            continue
-        try:
-            probability = float(parts[1][tuple_str_end_idx + 2:].strip())
-        except ValueError:
-            continue
-        if player == 'Alice':
-            alice_data[tuple(current_tuple)] = probability
-        elif player == 'Bob':
-            bob_data[tuple(current_tuple)] = probability
+    label names the regime (and equilibrium, e.g. 'nonce-only_eq2') in the output file names.
+    """
+    alice_data, bob_data = read_equilibrium(filename)
+    normalization_factor = kappa
+    regime_label = label
+    os.makedirs(images_dir, exist_ok=True)
 
     def _plot_histogram_ax(ax, data, normalization_factor, ylabel, panel_label):
         sorted_tuples = sorted(data.items(), key=lambda x: x[1], reverse=True)
@@ -89,7 +67,7 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         ax.set_xlim(0, 1)
         ax.text(0.5, -0.25, panel_label, fontsize=FONT_PANEL, ha='center', va='top', transform=ax.transAxes)
 
-    def create_discrete_heatmap(player_name, data, label, normalization_factor, difficulty_label):
+    def create_discrete_heatmap(player_name, data, label, normalization_factor, regime_label):
         if not data:
             return
         sorted_tuples = sorted(data.items(), key=lambda x: x[1], reverse=True)
@@ -156,8 +134,8 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
                     fontsize=font_panel, ha='center', va='top')
 
         plt.tight_layout()
-        plt.savefig(f'images/{player_name.lower()}_nash_heatmap_c{max_len}_{difficulty_label}.pdf', dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(os.path.join(images_dir, f'{player_name.lower()}_nash_heatmap_c{max_len}_{regime_label}.pdf'), dpi=300, bbox_inches='tight')
+        plt.close(fig)
 
     # For c=1, both players share a single side-by-side figure
     alice_sorted = sorted(alice_data.items(), key=lambda x: x[1], reverse=True) if alice_data else []
@@ -177,8 +155,8 @@ def visualize_nash_equilibria_discrete_file(filename="output.txt", normalization
         _plot_histogram_ax(ax_b, bob_data,   normalization_factor,
                            ylabel=r'$\sigma_{\mathrm{B}}(\bm{k})$', panel_label='(b)')
         plt.tight_layout()
-        plt.savefig(f'images/nash_heatmap_c1_{difficulty_label}.pdf', dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(os.path.join(images_dir, f'nash_heatmap_c1_{regime_label}.pdf'), dpi=300, bbox_inches='tight')
+        plt.close(fig)
     else:
-        create_discrete_heatmap('Alice', alice_data, '(a)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
-        create_discrete_heatmap('Bob', bob_data, '(b)', normalization_factor=normalization_factor, difficulty_label=difficulty_label)
+        create_discrete_heatmap('Alice', alice_data, '(a)', normalization_factor=normalization_factor, regime_label=regime_label)
+        create_discrete_heatmap('Bob', bob_data, '(b)', normalization_factor=normalization_factor, regime_label=regime_label)
